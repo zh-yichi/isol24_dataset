@@ -1,0 +1,155 @@
+
+    ________                     _____                    
+    ___  __ \___  __________________(_)_____________ _    
+    __  /_/ /  / / /_  __ \_  __ \_  /__  __ \_  __ `/    
+    _  _, _// /_/ /_  / / /  / / /  / _  / / /  /_/ /     
+    /_/ |_| \__,_/ /_/ /_//_/ /_//_/  /_/ /_/_\__, /      
+                                             /____/       
+    _____________________________  ___________            
+    ___    |__  ____/_  __ \__   |/  /_  ____/            
+    __  /| |_  /_   _  / / /_  /|_/ /_  /                 
+    _  ___ |  __/   / /_/ /_  /  / / / /___               
+    /_/  |_/_/      \___\_\/_/  /_/  \____/               
+
+Hostname:     sharmagroup-rn
+System:       Linux
+Node:         sharmagroup-rn
+Release:      7.0.0-28-generic
+Machine:      x86_64
+Processor:    x86_64
+JAX backend:  GPU
+JAX devices:  [CudaDevice(id=0)]
+Device kind:  NVIDIA GeForce RTX 5060 Ti
+Platform:     gpu
+
+QMC Parameters
+eql_time        -         10
+n_blocks        -         50
+n_walkers       -        100
+max_memory      -      14000
+seed            -         17
+walker_type     -        rhf
+trial           - pt2ccsd_bar
+dt              -      0.005
+n_exp_terms     -          6
+n_prop_steps    -         50
+n_batch         -          1
+max_error       -          0
+nchol_chunk     -        100
+mix_precision   -       True
+free_projection -      False
+
+Load system from Integral File
+Maximum memory per walker:            140.00 MB
+Maximum number of Cholesky per chunk: 2548
+Number of Cholesky chunks:            1
+Number of Cholesky per chunk:         350
+Number of padding Cholesky:           0
+
+QMC System
+Number of electrons: (36, 36)
+Spin Multiplicity:   0
+Number of orbitals:  60
+Number of Chol:      350
+
+Initalize QMC walkers by HF
+
+Equilibration
+  1/T  nodes        weight        energy   runTime
+ 0.00      0     100.00000    -680.92272      3.90
+ 1.00      0     101.99319    -681.50856      8.61
+ 2.00      0     101.62811    -681.62435     10.65
+ 3.00      0     101.27368    -681.64427     12.70
+ 4.00      0     100.41720    -681.57290     14.74
+ 5.00      0      99.91667    -681.61721     16.78
+ 6.00      0     100.23603    -681.68048     18.82
+ 7.00      0      99.71458    -681.61407     20.87
+ 8.00      0      99.64601    -681.64852     22.91
+ 9.00      0      99.30639    -681.60191     24.95
+10.00      0     100.18922    -681.70487     26.99
+
+Sampling
+Target (raw) 0.6 x max_error = 0.00000
+blocks  nodes      weight       E_Guide     error     weightp       E_Trial     error    Walltime
+     5      0    99.58458    -681.64865   0.01696   100.29662    -681.63030   0.00317       35.08
+    10      0    99.59013    -681.64735   0.00811   100.47016    -681.62797   0.00255       38.42
+    15      0    99.54139    -681.64134   0.00902   100.49681    -681.62979   0.00219       41.73
+    20      0    99.54040    -681.63295   0.00826   100.51604    -681.63012   0.00197       45.04
+    25      0    99.55060    -681.63580   0.00714   100.51133    -681.62861   0.00206       48.35
+    30      0    99.55963    -681.63892   0.00615   100.49770    -681.62885   0.00187       51.66
+    35      0    99.53746    -681.63783   0.00656   100.47833    -681.63145   0.00280       54.97
+    40      0    99.50722    -681.63532   0.00593   100.45343    -681.63114   0.00246       58.27
+    45      0    99.50211    -681.63596   0.00548   100.44105    -681.63152   0.00224       61.58
+    50      0    99.51539    -681.63625   0.00538   100.44608    -681.63109   0.00206       64.89
+
+ ***** Post Propagation Process ***** 
+Total number of samples 50
+
+Remove AFQMC/Guide Outliers
+Remove samples outside Zeta > 30
+Outlier bound [-682.85980, -680.41964]
+Removed 0 Outliers
+Outliers Energy: []
+
+Remove AFQMC/pt2CCSD Outliers
+Remove samples outside Zeta > 30
+Outlier bound [-681.92316, -681.33441]
+Removed 0 Outliers
+Outliers Energy []
+
+Blocking Analysis
+
+AFQMC/Guide
+Warning: small dataset, relaxed min_nblocks to 5
+nsample = 50, max_block_size = 10, min_nblocks = 5
+   B    NB    NS  Observable     Error    dError
+   1    50    50  -681.63621   0.00538   0.00054
+   2    25    50  -681.63622   0.00604   0.00087
+   3    16    48  -681.63607   0.00661   0.00121
+   4    12    48  -681.63606   0.00824   0.00176
+   5    10    50  -681.63624   0.00467   0.00110
+   6     8    48  -681.63608   0.00689   0.00184
+   7     7    49  -681.63727   0.00490   0.00141
+   8     6    48  -681.63606   0.00905   0.00286
+   9     5    45  -681.63595   0.00369   0.00130
+  10     5    50  -681.63624   0.00633   0.00224
+Fit (variance): plateau_var = -1.371e-01 ± 9.751e+02
+Fit (error):    plateau = nan ± nan
+     autocorrelation length ~ 97270.1 blocks
+     plateau reached at block size ~ 447970
+     !!!Failed to reach plateau in blocking
+     Return max block error
+
+AFQMC/pt2CCSD:
+Warning: small dataset, relaxed min_nblocks to 5
+nsample = 50, max_block_size = 10, min_nblocks = 5
+Blk_SZ   NBlk   NSmp      Energy     Error    dError
+     1     50     50  -681.63059   0.00201   0.00020
+     2     25     50  -681.63072   0.00243   0.00035
+     3     16     48  -681.63080   0.00248   0.00045
+     4     12     48  -681.63074   0.00214   0.00046
+     5     10     50  -681.63102   0.00210   0.00050
+     6      8     48  -681.63094   0.00219   0.00059
+     7      7     49  -681.63102   0.00177   0.00051
+     8      6     48  -681.63087   0.00182   0.00058
+     9      5     45  -681.63152   0.00241   0.00085
+    10      5     50  -681.63103   0.00202   0.00071
+Fit (variance): plateau_var = -1.24283e-03 ± 7.22173e+01
+Fit (error):    plateau_err = nan ± nan
+     autocorrelation length ~ 21019.5 blocks
+     plateau reached at block size ~ 96876
+     !!!Failed to reach plateau in blocking
+     Return max block error
+
+============================================================
+  AFQMC/pt2CCSD Result
+------------------------------------------------------------
+  [Guide] Average Weight                    99.51539
+  [Guide] Energy (Ha)             -681.63625 +/- 0.00905
+  [Trial] Average Weight                   100.44608
+  [Trial] Energy (Ha)             -681.63109 +/- 0.00248
+  Run Time                                 1m 06.85s
+============================================================
+
+ ***** AFQMC Sampling Finished ***** 
+
