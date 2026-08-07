@@ -1,0 +1,85 @@
+node: gpud01.delta.ncsa.illinois.edu
+               total        used        free      shared  buff/cache   available
+Mem:            2015         171        1635          10         228        1843
+Swap:              0           0           0
+22 molecule(s) to run from /work/hdd/bdka/yzhang65/isol24_dataset/geometry/small
+
+[1/22] 03_educt
+output file: 03_educt.out
+03_educt         C6H12O6      nao= 228  E(RHF)=   -683.3957900509  E(CCSD)=   -685.4183764748  E(AFQMC)=n/a
+
+[2/22] 03_product
+output file: 03_product.out
+03_product       C6H12O6      nao= 228  E(RHF)=   -683.3803196850  E(CCSD)=   -685.4096008124  E(AFQMC)=n/a
+
+[3/22] 09_educt
+output file: 09_educt.out
+09_educt         C12H20       nao= 268  E(RHF)=   -466.1295226814  E(CCSD)=   -467.9560532372  E(AFQMC)=n/a
+
+[4/22] 09_product
+output file: 09_product.out
+09_product       C12H20       nao= 268  E(RHF)=   -466.0971846428  E(CCSD)=   -467.9203829447  E(AFQMC)=n/a
+
+[5/22] 13_educt
+output file: 13_educt.out
+13_educt         C12H12N2     nao= 256  E(RHF)=   -570.3569335886  E(CCSD)=   -572.3305890588  E(AFQMC)=n/a
+
+[6/22] 13_product
+output file: 13_product.out
+13_product       C12H12N2     nao= 256  E(RHF)=   -570.3134488949  E(CCSD)=   -572.2851499464  E(AFQMC)=n/a
+
+[7/22] 14_educt
+output file: 14_educt.out
+14_educt         C11H12O3     nao= 256  E(RHF)=   -648.1838946774  E(CCSD)=   -650.2746623755  E(AFQMC)=n/a
+
+[8/22] 14_product
+output file: 14_product.out
+14_product       C11H12O3     nao= 256  E(RHF)=   -648.1833557917  E(CCSD)=   -650.2689494143  E(AFQMC)=n/a
+
+[9/22] 10_educt
+output file: 10_educt.out
+10_educt         C14H20O      nao= 310  E(RHF)=   -616.6689226156  E(CCSD)=   -618.9166807049  E(AFQMC)=n/a
+
+[10/22] 10_product
+output file: 10_product.out
+10_product       C14H20O      nao= 310  E(RHF)=   -616.6682618255  E(CCSD)=   -618.9079896988  E(AFQMC)=n/a
+
+[11/22] 20_educt
+output file: 20_educt.out
+20_educt         C14H12F2     nao= 284  E(RHF)=   -736.0764271919  E(CCSD)=   -738.3664599514  E(AFQMC)=n/a
+
+[12/22] 20_product
+output file: 20_product.out
+20_product       C14H12F2     nao= 284  E(RHF)=   -736.0685944024  E(CCSD)=   -738.3569159613  E(AFQMC)=n/a
+
+[13/22] 05_educt
+output file: 05_educt.out
+05_educt         C15H16O      nao= 304  E(RHF)=   -652.2321448163  E(CCSD)=   -654.5292992950  E(AFQMC)=n/a
+
+[14/22] 05_product
+output file: 05_product.out
+05_product       C15H16O      nao= 304  E(RHF)=   -652.1898380430  E(CCSD)=   -654.4731028619  E(AFQMC)=n/a
+
+[15/22] 02_educt
+output file: 02_educt.out
+02_educt         C15H24O2     nao= 358  E(RHF)=   -731.7753764074  E(CCSD)=   -734.3938121850  E(AFQMC)=n/a
+
+[16/22] 02_product
+output file: 02_product.out
+02_product       C15H24O2     nao= 358  E(RHF)=   -731.7369492895  E(CCSD)=   -734.3300367030  E(AFQMC)=n/a
+
+[17/22] 23_educt
+23_educt         FAILED: 23_educt: 141 electrons at charge +0 is open shell; RHF needs an even count -- set CHARGES['23_educt']
+
+[18/22] 23_product
+23_product       FAILED: 23_product: 141 electrons at charge +0 is open shell; RHF needs an even count -- set CHARGES['23_product']
+
+[19/22] 15_educt
+output file: 15_educt.out
+15_educt         C17H24O      nao= 372  E(RHF)=   -732.4751080365  E(CCSD)=   -735.1939518914  E(AFQMC)=n/a
+
+[20/22] 15_product
+output file: 15_product.out
+15_product       C17H24O      nao= 372  E(RHF)=   -732.4729910107  E(CCSD)=   -735.1788287227  E(AFQMC)=n/a
+
+[21/22] 24_educt

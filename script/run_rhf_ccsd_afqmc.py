@@ -47,13 +47,13 @@ GEOM_DIR = '../geometry/small'
 #                            'all'  -> every .xyz in GEOM_DIR
 #                            a name -> '03_educt'
 #                            a list -> ['03_educt', '03_product']
-MOLECULES = ['03_educt', '03_product']
+MOLECULES = 'all'
 
 # Order used when MOLECULES == 'all':  'name' or 'size' (fewest heavy atoms
 # first, so the cheap jobs finish first).
 ORDER = 'size'
 
-BASIS = 'sto6g'      # orbital basis
+BASIS = 'ccpvdz'      # orbital basis
 AUXBASIS = None        # DF auxiliary basis; None -> matching JK-fit set
 CHARGE = 0             # default charge, overridden per molecule by CHARGES
 UNIT = 'Angstrom'      # unit of the coordinates in the .xyz files
@@ -73,23 +73,23 @@ CC_ENE_TOL = 1e-6
 CC_NORM_TOL = 1e-5
 
 DO_CCSD = True
-DO_CCSD_T = True      # add the perturbative (T) correction
+DO_CCSD_T = False      # add the perturbative (T) correction
 FROZEN = 'auto'        # 'auto' -> mycc.set_frozen(); an int -> that many frozen
                        # core orbitals; 0 -> all-electron
 
-DO_AFQMC = False
+DO_AFQMC = True
 CHOL_CUT = 1e-5        # Cholesky decomposition threshold for the integrals
 AFQMC_OPTIONS = {
-    'eql_time': 10,
-    'n_blocks': 50,
-    'n_walkers': 100,
-    'max_memory': 14000,
+    'eql_time': 40,
+    'n_blocks': 1000,
+    'n_walkers': 300,
+    'max_memory': 100000,
     'seed': 17,
     'walker_type': 'rhf',
     'trial': 'pt2ccsd_bar',
 }
 
-MAX_MEMORY = 8000      # MB, for the pyscf part
+MAX_MEMORY = 200000      # MB, for the pyscf part
 VERBOSE = 4            # PySCF print level
 WORKDIR = '../run'     # one sub-directory per molecule is created here
 SUMMARY = 'summary.out'         # written inside WORKDIR

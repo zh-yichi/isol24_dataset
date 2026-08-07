@@ -1,0 +1,666 @@
+#INFO: **** input file is /work/hdd/bdka/yzhang65/isol24_dataset/script/run_rhf_ccsd_afqmc.py ****
+#!/usr/bin/env python
+"""DF-RHF -> DF-CCSD -> AFQMC for the ISOL24 geometries.
+
+For every requested .xyz file the script
+
+  1. converges a density-fitted RHF and drives it to an internally stable
+     solution with the second-order (Newton/CIAH) solver,
+  2. runs CCSD (optionally with the (T) correction) on top of it,
+  3. prepares the Cholesky integrals / CC amplitudes and launches ph-AFQMC,
+
+and collects everything into a single, human-readable `summary.out`.
+
+Each molecule runs inside its own working directory, because the AFQMC driver
+reads `options.bin`, `FCIDUMP_chol` and `amplitudes.npz` from the current
+directory and writes `afqmc.out` there.
+
+Everything is configured in the SETTINGS block below; just run
+
+    python run_rhf_ccsd_afqmc.py
+"""
+
+import os
+
+os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")
+
+import jax
+
+jax.config.update("jax_enable_x64", True)
+
+import glob
+import re
+import time
+import traceback
+from collections import Counter
+from datetime import datetime
+
+from pyscf import gto, scf, cc, lib
+
+# ----------------------------------------------------------------------------
+# SETTINGS -- edit these
+# ----------------------------------------------------------------------------
+# Directory holding the .xyz files.  Relative paths are resolved with respect to
+# this script, so it works no matter where you launch it from.
+GEOM_DIR = '../geometry/small'
+
+# Which molecule(s) to run -- no '.xyz' needed:
+#                            'all'  -> every .xyz in GEOM_DIR
+#                            a name -> '03_educt'
+#                            a list -> ['03_educt', '03_product']
+MOLECULES = 'all'
+
+# Order used when MOLECULES == 'all':  'name' or 'size' (fewest heavy atoms
+# first, so the cheap jobs finish first).
+ORDER = 'size'
+
+BASIS = 'ccpvdz'      # orbital basis
+AUXBASIS = None        # DF auxiliary basis; None -> matching JK-fit set
+CHARGE = 0             # default charge, overridden per molecule by CHARGES
+UNIT = 'Angstrom'      # unit of the coordinates in the .xyz files
+
+# Per-molecule charges.  A key is either a full name ('24_educt') or just the
+# reaction number ('24'), which then covers both the educt and the product.
+# Reaction 24 (C18H33Si) is a cation: neutral would have an odd electron count.
+CHARGES = {
+    '24': 1,
+}
+
+CONV_TOL = 1e-10       # SCF energy convergence
+MAX_STAB_CYCLE = 10    # max stability-check / restart iterations
+CHECK_EXTERNAL = False # also run the external (RHF -> UHF) stability check
+
+CC_ENE_TOL = 1e-6
+CC_NORM_TOL = 1e-5
+
+DO_CCSD = True
+DO_CCSD_T = False      # add the perturbative (T) correction
+FROZEN = 'auto'        # 'auto' -> mycc.set_frozen(); an int -> that many frozen
+                       # core orbitals; 0 -> all-electron
+
+DO_AFQMC = True
+CHOL_CUT = 1e-5        # Cholesky decomposition threshold for the integrals
+AFQMC_OPTIONS = {
+    'eql_time': 40,
+    'n_blocks': 1000,
+    'n_walkers': 300,
+    'max_memory': 100000,
+    'seed': 17,
+    'walker_type': 'rhf',
+    'trial': 'pt2ccsd_bar',
+}
+
+MAX_MEMORY = 200000      # MB, for the pyscf part
+VERBOSE = 4            # PySCF print level
+WORKDIR = '../run'     # one sub-directory per molecule is created here
+SUMMARY = 'summary.out'         # written inside WORKDIR
+SKIP_EXISTING = True   # skip molecules whose work directory already holds a
+                       # finished result (lets you resume an interrupted batch)
+# ----------------------------------------------------------------------------
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+HARTREE2KCAL = 627.5094740631
+
+
+def _resolve(path):
+    """Resolve `path` relative to this script's directory."""
+    return path if os.path.isabs(path) else os.path.normpath(os.path.join(HERE, path))
+
+
+def read_xyz(path):
+    """Return (atom list for gto.Mole, comment line) from an .xyz file."""
+    with open(path) as fh:
+        lines = fh.read().splitlines()
+
+    natm = int(lines[0].split()[0])
+    comment = lines[1].strip() if len(lines) > 1 else ''
+
+    atoms = []
+    for line in lines[2:]:
+        if not line.strip():
+            continue
+        sym, x, y, z = line.split()[:4]
+        atoms.append((sym, (float(x), float(y), float(z))))
+
+    if len(atoms) != natm:
+        raise ValueError('%s: header says %d atoms, found %d'
+                         % (path, natm, len(atoms)))
+    return atoms, comment
+
+
+def formula(atoms):
+    """Molecular formula in Hill notation."""
+    c = Counter(sym for sym, _ in atoms)
+    keys = ['C', 'H'] + sorted(k for k in c if k not in ('C', 'H'))
+    return ''.join(k + (str(c[k]) if c[k] > 1 else '') for k in keys if k in c)
+
+
+def n_heavy(atoms):
+    return sum(1 for sym, _ in atoms if sym != 'H')
+
+
+def charge_of(tag):
+    """Charge for molecule `tag`: an entry for the full name wins over one for
+    the bare reaction number, which in turn wins over the global default."""
+    if tag in CHARGES:
+        return CHARGES[tag]
+    return CHARGES.get(tag.split('_')[0], CHARGE)
+
+
+def build_mol(path, tag, output=None):
+    """Return (mol, comment, formula).  The metadata is kept outside the Mole
+    object so that pyscf's check_sanity does not complain about it."""
+    atoms, comment = read_xyz(path)
+    charge = charge_of(tag)
+
+    # catch a bad charge here, with a clearer message than pyscf's
+    nelec = sum(gto.charge(sym) for sym, _ in atoms) - charge
+    if nelec % 2:
+        raise ValueError('%s: %d electrons at charge %+d is open shell; RHF '
+                         'needs an even count -- set CHARGES[%r]'
+                         % (tag, nelec, charge, tag))
+
+    mol = gto.M(atom=atoms, basis=BASIS, charge=charge, spin=0, unit=UNIT,
+                max_memory=MAX_MEMORY, verbose=VERBOSE, output=output)
+    return mol, comment, formula(atoms)
+
+
+def run_stable_rhf(mol, chkfile=None):
+    """DF-RHF driven until the solution is internally stable.
+
+    Returns (mf, stable, n_cycle) where `mf` is the final mean-field object.
+    """
+    mf = scf.RHF(mol).density_fit(auxbasis=AUXBASIS)
+    mf.conv_tol = CONV_TOL
+    if chkfile:
+        mf.chkfile = chkfile
+    mf.kernel()
+
+    second_order = False
+    stable = False
+    for cycle in range(1, MAX_STAB_CYCLE + 1):
+        mo_i, mo_e, stable_i, stable_e = mf.stability(
+            internal=True, external=CHECK_EXTERNAL, return_status=True)
+
+        if CHECK_EXTERNAL and not stable_e:
+            lib.logger.warn(mf, 'External instability (RHF -> UHF/complex) '
+                                'detected; an unrestricted reference may be '
+                                'lower in energy.')
+
+        if stable_i and mf.converged:
+            stable = True
+            lib.logger.note(mf, 'Stable RHF solution after %d stability '
+                                'cycle(s), E = %.12f', cycle, mf.e_tot)
+            break
+
+        lib.logger.note(mf, 'Cycle %d: internal instability (or unconverged '
+                            'SCF); rotating orbitals and restarting with the '
+                            'second-order solver.', cycle)
+
+        mo_occ = mf.mo_occ
+        if not second_order:
+            # Newton/CIAH on top of the DF-RHF object; density fitting is kept.
+            mf = mf.newton()
+            second_order = True
+        mf.kernel(mo_i, mo_occ)
+    else:
+        lib.logger.warn(mf, 'No stable solution after %d stability cycles.',
+                        MAX_STAB_CYCLE)
+
+    return mf, stable, cycle
+
+
+def run_ccsd(mf):
+    """CCSD (optionally +(T)) on top of the stable DF-RHF reference."""
+    mycc = cc.CCSD(mf)
+    mycc.conv_tol = CC_ENE_TOL # 1e-6
+    mycc.conv_tol_normt = CC_NORM_TOL # e-5
+    mycc.max_memory = MAX_MEMORY
+    if FROZEN == 'auto':
+        mycc.set_frozen()
+    elif FROZEN:
+        mycc.frozen = FROZEN
+    mycc.kernel()
+
+    e_t = None
+    if DO_CCSD_T:
+        e_t = mycc.ccsd_t()
+    return mycc, e_t
+
+
+def run_afqmc(mycc):
+    """Prepare the integrals and launch ph-AFQMC in the current directory."""
+    from afqmc import integral, launch_afqmc
+
+    integral.prep_integral(mycc, chol_cut=CHOL_CUT)
+    launch_afqmc.ph_afqmc(dict(AFQMC_OPTIONS))
+    return parse_afqmc_out('afqmc.out')
+
+
+def parse_afqmc_out(path):
+    """Pull the final energies out of an afqmc.out.
+
+    Handles both the plain 'Energy (Ha)' line and the '[Guide]' / '[Trial]'
+    lines printed by the pt2CCSD driver.  Returns a dict of
+    {label: (energy, error)} with label in {'afqmc', 'guide', 'trial'}.
+    """
+    pattern = re.compile(r'^\s*(?:\[(\w+)\]\s+)?Energy \(Ha\)\s+'
+                         r'(-?\d+\.\d+)\s*\+/-\s*(\d+\.\d+)')
+    found = {}
+    if not os.path.isfile(path):
+        return found
+    with open(path) as fh:
+        for line in fh:
+            m = pattern.match(line)
+            if m:
+                label = (m.group(1) or 'afqmc').lower()
+                found[label] = (float(m.group(2)), float(m.group(3)))
+    return found
+
+
+def select_molecules(geom_dir):
+    """Turn the MOLECULES setting into an ordered list of tags (no extension).
+
+    A trailing '.xyz' is accepted but never required.
+    """
+    if isinstance(MOLECULES, str) and MOLECULES.lower() == 'all':
+        tags = [os.path.splitext(os.path.basename(p))[0]
+                for p in glob.glob(os.path.join(geom_dir, '*.xyz'))]
+        if ORDER == 'size':
+            def key(tag):
+                atoms, _ = read_xyz(os.path.join(geom_dir, tag + '.xyz'))
+                return (n_heavy(atoms), len(atoms), tag)
+            tags.sort(key=key)
+        else:
+            tags.sort()
+        return tags
+
+    names = [MOLECULES] if isinstance(MOLECULES, str) else list(MOLECULES)
+    return [os.path.splitext(os.path.basename(n))[0] for n in names]
+
+
+def run_one(tag, geom_dir, workroot):
+    """Run RHF -> CCSD -> AFQMC for one geometry; returns a result dict."""
+    xyz = os.path.join(geom_dir, tag + '.xyz')
+    if not os.path.isfile(xyz):
+        raise IOError('geometry not found: %s' % xyz)
+
+    rundir = os.path.join(workroot, tag)
+    os.makedirs(rundir, exist_ok=True)
+
+    res = {'tag': tag, 'status': 'running'}
+    cwd = os.getcwd()
+    os.chdir(rundir)          # AFQMC reads/writes in the current directory
+    try:
+        mol, comment, form = build_mol(xyz, tag, output=tag + '.out')
+        res.update(formula=form, natm=mol.natm, nao=mol.nao_nr(),
+                   nelec=mol.nelectron, charge=mol.charge)
+        lib.logger.note(mol, 'Geometry : %s', xyz)
+        lib.logger.note(mol, 'Comment  : %s', comment)
+        lib.logger.note(mol, 'Atoms    : %d   charge: %+d   basis: %s   AOs: %d',
+                        mol.natm, mol.charge, BASIS, mol.nao_nr())
+
+        t0 = time.time()
+        mf, stable, ncycle = run_stable_rhf(mol, chkfile=tag + '.chk')
+        res.update(e_rhf=mf.e_tot, scf_converged=bool(mf.converged),
+                   stable=bool(stable), stab_cycles=ncycle,
+                   t_scf=time.time() - t0)
+
+        if DO_CCSD:
+            t0 = time.time()
+            mycc, e_t = run_ccsd(mf)
+            nfrz = mycc.frozen if isinstance(mycc.frozen, int) else \
+                len(mycc.frozen or [])
+            res.update(e_ccsd=mycc.e_tot, e_corr=mycc.e_corr,
+                       cc_converged=bool(mycc.converged), frozen=nfrz,
+                       t_cc=time.time() - t0)
+            if e_t is not None:
+                res['e_ccsd_t'] = mycc.e_tot + e_t
+
+            if DO_AFQMC:
+                t0 = time.time()
+                energies = run_afqmc(mycc)
+                res['t_qmc'] = time.time() - t0
+                # the pt2CCSD driver reports [Guide] and [Trial]; the trial
+                # (pt2-corrected) energy is the production number.
+                for label in ('trial', 'afqmc', 'guide'):
+                    if label in energies:
+                        res['e_afqmc'], res['e_afqmc_err'] = energies[label]
+                        res['afqmc_label'] = label
+                        break
+                else:
+                    raise RuntimeError('no AFQMC energy found in afqmc.out')
+                if 'guide' in energies:
+                    res['e_guide'], res['e_guide_err'] = energies['guide']
+
+        res['status'] = 'ok'
+    except Exception as err:                       # keep the batch going
+        res['status'] = 'FAILED: %s' % err
+        with open('traceback.txt', 'w') as fh:
+            fh.write(traceback.format_exc())
+        print('%-16s FAILED: %s' % (tag, err), flush=True)
+    finally:
+        os.chdir(cwd)
+
+    if res['status'] == 'ok':
+        print('%-16s %-12s nao=%4d  E(RHF)=%18.10f  E(CCSD)=%18.10f  '
+              'E(AFQMC)=%s'
+              % (tag, res.get('formula', ''), res.get('nao', 0),
+                 res.get('e_rhf', float('nan')),
+                 res.get('e_ccsd', float('nan')),
+                 ('%.5f +/- %.5f' % (res['e_afqmc'], res['e_afqmc_err']))
+                 if 'e_afqmc' in res else 'n/a'), flush=True)
+    return res
+
+
+# ----------------------------------------------------------------------------
+# summary
+# ----------------------------------------------------------------------------
+
+def _f(value, width=18, prec=10):
+    return ('%*.*f' % (width, prec, value)) if value is not None else \
+        '%*s' % (width, 'n/a')
+
+
+def write_summary(results, path, geom_dir):
+    """(Re)write the summary file from the results collected so far."""
+    cols = ('molecule', 'formula', 'chg', 'nao', 'nel', 'frz', 'stab',
+            'E(RHF)', 'E(CCSD)', 'E(CCSD(T))', 'E(AFQMC)', 'err',
+            't_scf', 't_cc', 't_qmc')
+    head = ('%-16s %-12s %4s %5s %5s %4s %5s %18s %18s %18s %16s %9s '
+            '%9s %9s %9s' % cols)
+
+    lines = []
+    lines.append('=' * len(head))
+    lines.append(' ISOL24 : DF-RHF / DF-CCSD / AFQMC summary')
+    lines.append('=' * len(head))
+    lines.append(' generated : %s' % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    lines.append(' geometry  : %s' % geom_dir)
+    lines.append(' basis     : %-14s auxbasis : %-22s charge : %+d%s'
+                 % (BASIS, AUXBASIS or 'default JK-fit', CHARGE,
+                    ('  (overrides: %s)'
+                     % ', '.join('%s %+d' % kv for kv in sorted(CHARGES.items())))
+                    if CHARGES else ''))
+    lines.append(' scf       : DF-RHF, conv_tol=%.1e, stability loop '
+                 '(max %d cycles, second-order restart)'
+                 % (CONV_TOL, MAX_STAB_CYCLE))
+    lines.append(' cc        : %s, conv_tol=%.1e, conv_tol_normt=%.1e   '
+                 'frozen : %s'
+                 % ('CCSD(T)' if DO_CCSD_T else 'CCSD', CC_ENE_TOL,
+                    CC_NORM_TOL, FROZEN))
+    if DO_AFQMC:
+        opt = ', '.join('%s=%s' % kv for kv in sorted(AFQMC_OPTIONS.items()))
+        lines.append(' afqmc     : chol_cut=%.1e, %s' % (CHOL_CUT, opt))
+    lines.append(' energies in Hartree, times in seconds')
+    lines.append('')
+    lines.append(head)
+    lines.append('-' * len(head))
+
+    for r in results:
+        if r['status'] != 'ok':
+            lines.append('%-16s %-12s %s' % (r['tag'], r.get('formula', ''),
+                                             r['status']))
+            continue
+        lines.append(
+            '%-16s %-12s %+4d %5d %5d %4s %5s %s %s %s %s %s %9s %9s %9s'
+            % (r['tag'], r.get('formula', ''), r.get('charge', 0),
+               r.get('nao', 0), r.get('nelec', 0),
+               r.get('frozen', '-'),
+               'yes' if r.get('stable') else 'NO',
+               _f(r.get('e_rhf')), _f(r.get('e_ccsd')), _f(r.get('e_ccsd_t')),
+               _f(r.get('e_afqmc'), 16, 5), _f(r.get('e_afqmc_err'), 9, 5),
+               '%9.1f' % r['t_scf'] if 't_scf' in r else '%9s' % '-',
+               '%9.1f' % r['t_cc'] if 't_cc' in r else '%9s' % '-',
+               '%9.1f' % r['t_qmc'] if 't_qmc' in r else '%9s' % '-'))
+
+    lines.append('-' * len(head))
+
+    rxn = reaction_energies(results)
+    if rxn:
+        lines.append('')
+        lines.append(' Isomerization energies, E(product) - E(educt), kcal/mol')
+        rhead = ('%-10s %-12s %14s %14s %14s %14s %9s'
+                 % ('reaction', 'formula', 'dE(RHF)', 'dE(CCSD)',
+                    'dE(CCSD(T))', 'dE(AFQMC)', 'err'))
+        lines.append('')
+        lines.append(rhead)
+        lines.append('-' * len(rhead))
+        for idx, form, d in rxn:
+            lines.append('%-10s %-12s %s %s %s %s %s'
+                         % (idx, form,
+                            _f(d.get('rhf'), 14, 4), _f(d.get('ccsd'), 14, 4),
+                            _f(d.get('ccsd_t'), 14, 4),
+                            _f(d.get('afqmc'), 14, 4),
+                            _f(d.get('afqmc_err'), 9, 4)))
+        lines.append('-' * len(rhead))
+
+    with open(path, 'w') as fh:
+        fh.write('\n'.join(lines) + '\n')
+
+
+def reaction_energies(results):
+    """Pair up <n>_educt / <n>_product results and return the deltas."""
+    done = {r['tag']: r for r in results if r['status'] == 'ok'}
+    out = []
+    for tag in sorted(done):
+        if not tag.endswith('_educt'):
+            continue
+        idx = tag[:-len('_educt')]
+        prod = done.get(idx + '_product')
+        if prod is None:
+            continue
+        educt = done[tag]
+        d = {}
+        for key, name in (('e_rhf', 'rhf'), ('e_ccsd', 'ccsd'),
+                          ('e_ccsd_t', 'ccsd_t'), ('e_afqmc', 'afqmc')):
+            if key in educt and key in prod:
+                d[name] = (prod[key] - educt[key]) * HARTREE2KCAL
+        if 'e_afqmc_err' in educt and 'e_afqmc_err' in prod:
+            d['afqmc_err'] = ((educt['e_afqmc_err'] ** 2 +
+                               prod['e_afqmc_err'] ** 2) ** 0.5) * HARTREE2KCAL
+        out.append((idx, educt.get('formula', ''), d))
+    return out
+
+
+def main():
+    geom_dir = _resolve(GEOM_DIR)
+    workroot = _resolve(WORKDIR)
+    os.makedirs(workroot, exist_ok=True)
+    summary = os.path.join(workroot, SUMMARY)
+
+    tags = select_molecules(geom_dir)
+    print('%d molecule(s) to run from %s' % (len(tags), geom_dir), flush=True)
+
+    results = []
+    for i, tag in enumerate(tags, 1):
+        done = os.path.join(workroot, tag, 'afqmc.out' if DO_AFQMC
+                            else tag + '.out')
+        if SKIP_EXISTING and os.path.isfile(done):
+            energies = parse_afqmc_out(done) if DO_AFQMC else {}
+            if energies or not DO_AFQMC:
+                print('[%d/%d] %-16s already done, skipping'
+                      % (i, len(tags), tag), flush=True)
+                continue
+
+        print('\n[%d/%d] %s' % (i, len(tags), tag), flush=True)
+        results.append(run_one(tag, geom_dir, workroot))
+        write_summary(results, summary, geom_dir)   # keep it up to date
+
+    write_summary(results, summary, geom_dir)
+    print('\nSummary written to %s' % summary, flush=True)
+    return results
+
+
+if __name__ == '__main__':
+    main()
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='gpue03.delta.ncsa.illinois.edu', release='5.14.0-427.91.1.el9_4.x86_64', version='#1 SMP PREEMPT_DYNAMIC Wed Sep 17 10:08:59 EDT 2025', machine='x86_64')  Threads 12
+Python 3.11.14 (main, Oct 21 2025, 18:31:21) [GCC 11.2.0]
+numpy 2.3.5  scipy 1.16.3  h5py 3.15.1
+Date: Wed Aug  5 07:13:07 2026
+PySCF version 2.11.0
+PySCF path  /u/yzhang65/myprojects/software/pyscf
+GIT HEAD (branch master) f520f5381c0b41f716d847009817cbc64e52c0d5
+
+[ENV] PYSCF_TMPDIR /projects/bdka/yzhang65/scratch/pyscf
+[ENV] PYSCF_EXT_PATH /u/yzhang65/myprojects/software/pyscf-forge
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 52
+[INPUT] num. electrons = 154
+[INPUT] charge = 1
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = Angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 C     -0.184877630027  -0.331534329310   0.058245291533 AA   -0.349368087310  -0.626509083287   0.110067649043 Bohr   0.0
+[INPUT]  2 C      0.511801783989   0.866367758473  -0.525953270728 AA    0.967165201803   1.637197786667  -0.993907635995 Bohr   0.0
+[INPUT]  3 C      0.403302618656  -1.671307379154  -0.241549841511 AA    0.762131494580  -3.158313216566  -0.456463045888 Bohr   0.0
+[INPUT]  4 C     -0.011404549599   2.236884021080   0.026187309214 AA   -0.021551475316   4.227098172257   0.049486842354 Bohr   0.0
+[INPUT]  5 C      0.477076440001   0.818984159444  -2.076937112048 AA    0.901543812084   1.547655761706  -3.924842319716 Bohr   0.0
+[INPUT]  6 C     -0.442413507981   2.083895184177   1.496028556341 AA   -0.836040363892   3.937991170395   2.827084246013 Bohr   0.0
+[INPUT]  7 H      0.851682142516   2.914842636295  -0.001232592542 AA    1.609445994538   5.508254278803  -0.002329262328 Bohr   0.0
+[INPUT]  8 C     -1.121751255871   2.903217681724  -0.801805487395 AA   -2.119802653483   5.486286298453  -1.515192776350 Bohr   0.0
+[INPUT]  9 C     -1.614114295672   1.102202749191   1.619232313217 AA   -3.050233952565   2.082861329714   3.059905604026 Bohr   0.0
+[INPUT] 10 H      0.397986774072   1.715997797447   2.100111512049 AA    0.752086004195   3.242765867532   3.968635588819 Bohr   0.0
+[INPUT] 11 H     -0.731656048323   3.060623881805   1.899987331998 AA   -1.382629548712   5.783740906915   3.590455697619 Bohr   0.0
+[INPUT] 12 C     -1.265374531927  -0.241078156549   0.954045378479 AA   -2.391211310342  -0.455571690493   1.802884475732 Bohr   0.0
+[INPUT] 13 H     -1.860320885349   0.908028988373   2.669115921763 AA   -3.515496977118   1.715926101191   5.043898086848 Bohr   0.0
+[INPUT] 14 H     -2.507996128968   1.555448149340   1.172978351009 AA   -4.739425805219   2.939371003214   2.216607833451 Bohr   0.0
+[INPUT] 15 H     -1.303336599653  -1.114861855705   1.622104882044 AA   -2.462949221466  -2.106783574007   3.065333972383 Bohr   0.0
+[INPUT] 16 Si    -2.983293865036  -0.968604008984  -0.050410161187 AA   -5.637608354013  -1.830396300136  -0.095261398539 Bohr   0.0
+[INPUT] 17 C      1.868989703470  -1.722702908790   0.282426470288 AA    3.531878669190  -3.255436691605   0.533708679172 Bohr   0.0
+[INPUT] 18 C      2.703652909701  -0.604943548202  -0.355834931883 AA    5.109163535218  -1.143177626924  -0.672430566812 Bohr   0.0
+[INPUT] 19 C      2.028764070616   0.745526704386  -0.072257163279 AA    3.833808464822   1.408841289839  -0.136546249135 Bohr   0.0
+[INPUT] 20 H     -0.185364923010  -2.468927703112   0.217963394838 AA   -0.350288937590  -4.665597180233   0.411891121424 Bohr   0.0
+[INPUT] 21 H      0.427229087908  -1.836246556235  -1.326812974567 AA    0.807345968594  -3.470003088460  -2.507313140451 Bohr   0.0
+[INPUT] 22 H      1.861025990505  -1.612514541928   1.374549230082 AA    3.516829432752  -3.047210856122   2.597521589587 Bohr   0.0
+[INPUT] 23 H      2.284527983856  -2.709704515668   0.049794641424 AA    4.317132213393  -5.120599413110   0.094098234762 Bohr   0.0
+[INPUT] 24 C      4.150071172011  -0.605716356063   0.123111458646 AA    7.842497912554  -1.144638022129   0.232646939637 Bohr   0.0
+[INPUT] 25 H      2.718231815715  -0.769176379473  -1.440988392744 AA    5.136713674781  -1.453532698688  -2.723073410963 Bohr   0.0
+[INPUT] 26 H      2.080030131909   0.955030608157   1.002147447684 AA    3.930687280151   1.804746289994   1.893784212555 Bohr   0.0
+[INPUT] 27 H      2.559589220006   1.552134977114  -0.591058778315 AA    4.836922617200   2.933110015104  -1.116939214535 Bohr   0.0
+[INPUT] 28 C     -4.209399773918  -0.927989230113   1.384924265614 AA   -7.954612721511  -1.753645491460   2.617127565275 Bohr   0.0
+[INPUT] 29 C     -3.474659999377   0.176064664715  -1.463845628913 AA   -6.566155774804   0.332713996525  -2.766267327287 Bohr   0.0
+[INPUT] 30 C     -2.650091978792  -2.724342470937  -0.650516370156 AA   -5.007948044824  -5.148261139592  -1.229297779141 Bohr   0.0
+[INPUT] 31 H     -5.178309492451  -1.302671660326   1.023729733244 AA   -9.785586728968  -2.461692668249   1.934568821405 Bohr   0.0
+[INPUT] 32 H     -3.887098570061  -1.572315673429   2.212955473720 AA   -7.345551716604  -2.971246004142   4.181879771188 Bohr   0.0
+[INPUT] 33 H     -4.363266815538   0.086811876245   1.769115296766 AA   -8.245379289770   0.164050670463   3.343143393666 Bohr   0.0
+[INPUT] 34 H     -4.332069519687  -0.290782210573  -1.972027540110 AA   -8.186424944785  -0.549498739879  -3.726591960908 Bohr   0.0
+[INPUT] 35 H     -3.800146750251   1.162890825175  -1.116456128985 AA   -7.181236591130   2.197545172350  -2.109796313874 Bohr   0.0
+[INPUT] 36 H     -2.680829470471   0.305331850741  -2.208226010539 AA   -5.066033485853   0.576993575007  -4.172942381060 Bohr   0.0
+[INPUT] 37 H     -3.599994712473  -3.124128845223  -1.035989863380 AA   -6.803004056456  -5.903747895325  -1.957737109614 Bohr   0.0
+[INPUT] 38 H     -1.919795278481  -2.767707974799  -1.466525610102 AA   -3.627887291562  -5.230210065145  -2.771331757753 Bohr   0.0
+[INPUT] 39 H     -2.318129000322  -3.390572810062   0.155468893788 AA   -4.380628932020  -6.407254016414   0.293793630148 Bohr   0.0
+[INPUT] 40 H      1.016578612499   1.693253666513  -2.457592582538 AA    1.921055161713   3.199785689125  -4.644176906759 Bohr   0.0
+[INPUT] 41 H      0.962584668898  -0.079320066620  -2.465471726689 AA    1.819021395922  -0.149893202094  -4.659066331301 Bohr   0.0
+[INPUT] 42 H     -0.548433432323   0.858737388657  -2.456131081488 AA   -1.036388984646   1.622778477486  -4.641415070044 Bohr   0.0
+[INPUT] 43 H     -1.425613980426   3.837026185659  -0.313625663359 AA   -2.694019982356   7.250928623680  -0.592666609384 Bohr   0.0
+[INPUT] 44 H     -0.781513914960   3.149296631032  -1.812391151618 AA   -1.476847261811   5.951308117666  -3.424922907143 Bohr   0.0
+[INPUT] 45 H     -2.005531686476   2.266236759727  -0.891144920490 AA   -3.789905621577   4.282566809306  -1.684019837023 Bohr   0.0
+[INPUT] 46 C      5.150361966796  -0.673013573603  -0.762833096501 AA    9.732773559621  -1.271811332224  -1.441545631141 Bohr   0.0
+[INPUT] 47 C      4.398630319694  -0.524417193069   1.610324760252 AA    8.312206627430  -0.991004869914   3.043072768482 Bohr   0.0
+[INPUT] 48 H      6.190782084676  -0.666117287931  -0.442525016649 AA   11.698882636902  -1.258779241028  -0.836251084735 Bohr   0.0
+[INPUT] 49 H      4.958452951513  -0.739065619327  -1.833323456713 AA    9.370118079901  -1.396631608610  -3.464479230928 Bohr   0.0
+[INPUT] 50 H      3.992651264378  -1.403545675065   2.131548470366 AA    7.545017400573  -2.652316929191   4.028042830227 Bohr   0.0
+[INPUT] 51 H      5.471389773901  -0.472479547655   1.822716685608 AA   10.339428193419  -0.892856944526   3.444435338474 Bohr   0.0
+[INPUT] 52 H      3.921395110138   0.360952932436   2.054653484460 AA    7.410362784369   0.682102186163   3.882732366513 Bohr   0.0
+
+nuclear repulsion = 1743.8620874925
+number of shells = 194
+number of NR pGTOs = 740
+number of NR cGTOs = 435
+basis = ccpvdz
+ecp = {}
+CPU time:    107737.40
+Geometry : /work/hdd/bdka/yzhang65/isol24_dataset/geometry/small/24_educt.xyz
+Comment  : ISOL24 reaction 24 educt  C18H33Si  (converted from Bohr to Angstrom)
+Atoms    : 52   charge: +1   basis: ccpvdz   AOs: 435
+
+
+******** <class 'pyscf.df.df_jk.DFRHF'> ********
+method = DFRHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+diis_damp = 0
+SCF conv_tol = 1e-10
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = False
+chkfile to save SCF result = 24_educt.chk
+max_memory 200000 MB (current use 6831 MB)
+Set gradient conv threshold to 1e-05
+Initial guess from minao.
+******** <class 'pyscf.df.df.DF'> ********
+auxbasis = cc-pvdz-jkfit
+max_memory = 200000
+init E= -994.023910460338
+  HOMO = -0.241331358159041  LUMO = -0.0299453922455428
+cycle= 1 E= -989.3368734792  delta_E= 4.69  |g|= 0.814  |ddm|= 6.36
+  HOMO = -0.455114175210725  LUMO = -0.200559143390273
+cycle= 2 E= -989.561844449147  delta_E= -0.225  |g|= 0.352  |ddm|= 1.36
+  HOMO = -0.44247565645385  LUMO = -0.0598013895718632
+cycle= 3 E= -989.594642035382  delta_E= -0.0328  |g|= 0.157  |ddm|= 0.494
+  HOMO = -0.442479838489963  LUMO = -0.084755621548678
+cycle= 4 E= -989.602284789033  delta_E= -0.00764  |g|= 0.0227  |ddm|= 0.238
+  HOMO = -0.444544296133602  LUMO = -0.0862619487754873
+cycle= 5 E= -989.602508846584  delta_E= -0.000224  |g|= 0.00948  |ddm|= 0.0339
+  HOMO = -0.444684017030283  LUMO = -0.0854864019124158
+cycle= 6 E= -989.602556426442  delta_E= -4.76e-05  |g|= 0.00308  |ddm|= 0.0164
+  HOMO = -0.44461434358475  LUMO = -0.0851543690615084
+cycle= 7 E= -989.602566087074  delta_E= -9.66e-06  |g|= 0.00154  |ddm|= 0.00794
+  HOMO = -0.444752324001368  LUMO = -0.0850455748586499
+cycle= 8 E= -989.602567929019  delta_E= -1.84e-06  |g|= 0.000475  |ddm|= 0.0039
+  HOMO = -0.444782477997402  LUMO = -0.0850352697313733
+cycle= 9 E= -989.602568149175  delta_E= -2.2e-07  |g|= 0.000156  |ddm|= 0.00138
+  HOMO = -0.444775440825248  LUMO = -0.0850404267480585
+cycle= 10 E= -989.602568172245  delta_E= -2.31e-08  |g|= 5.46e-05  |ddm|= 0.000432
+  HOMO = -0.444784998237647  LUMO = -0.0850421456800803
+cycle= 11 E= -989.602568175236  delta_E= -2.99e-09  |g|= 1.73e-05  |ddm|= 0.000164
+  HOMO = -0.444784673907219  LUMO = -0.0850443212023996
+cycle= 12 E= -989.60256817549  delta_E= -2.54e-10  |g|= 5.24e-06  |ddm|= 4.66e-05
+  HOMO = -0.444784447784335  LUMO = -0.0850444115279352
+cycle= 13 E= -989.60256817552  delta_E= -3e-11  |g|= 2.21e-06  |ddm|= 1.31e-05
+  HOMO = -0.444784648411218  LUMO = -0.0850443756383036
+Extra cycle  E= -989.602568175517  delta_E= 3.18e-12  |g|= 1.27e-06  |ddm|= 4.06e-06
+converged SCF energy = -989.602568175517
+rhf_internal: lowest eigs of H = [0.88560274 0.95391272 0.96273982]
+<class 'pyscf.df.df_jk.DFRHF'> wavefunction is stable in the internal stability analysis
+Stable RHF solution after 1 stability cycle(s), E = -989.602568175517
+
+******** <class 'pyscf.cc.dfccsd.RCCSD'> ********
+CC2 = 0
+CCSD nocc = 54, nmo = 412
+frozen orbitals 23
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 6814 MB)
+Init t2, MP2 energy = -992.244294538144  E_corr(MP2) -2.64172636262701
+Init E_corr(RCCSD) = -2.64172636262785
+cycle = 1  E_corr(RCCSD) = -2.76316050333864  dE = -0.121434141  norm(t1,t2) = 0.129202
+cycle = 2  E_corr(RCCSD) = -2.83227928147812  dE = -0.0691187781  norm(t1,t2) = 0.0385408
+cycle = 3  E_corr(RCCSD) = -2.84058513154008  dE = -0.00830585006  norm(t1,t2) = 0.0212294
+cycle = 4  E_corr(RCCSD) = -2.85157516167336  dE = -0.0109900301  norm(t1,t2) = 0.00855989
+cycle = 5  E_corr(RCCSD) = -2.85198339373528  dE = -0.000408232062  norm(t1,t2) = 0.0038694
+cycle = 6  E_corr(RCCSD) = -2.85132062366671  dE = 0.000662770069  norm(t1,t2) = 0.00183402
+cycle = 7  E_corr(RCCSD) = -2.85119592607701  dE = 0.00012469759  norm(t1,t2) = 0.000704341
+cycle = 8  E_corr(RCCSD) = -2.85123443107302  dE = -3.8504996e-05  norm(t1,t2) = 0.000346747
+cycle = 9  E_corr(RCCSD) = -2.85125853001181  dE = -2.40989388e-05  norm(t1,t2) = 0.000152519
+cycle = 10  E_corr(RCCSD) = -2.85125783247033  dE = 6.97541477e-07  norm(t1,t2) = 6.53019e-05
+cycle = 11  E_corr(RCCSD) = -2.85126262454046  dE = -4.79207013e-06  norm(t1,t2) = 3.40252e-05
+cycle = 12  E_corr(RCCSD) = -2.8512634046858  dE = -7.80145336e-07  norm(t1,t2) = 1.52488e-05
+cycle = 13  E_corr(RCCSD) = -2.85126455590202  dE = -1.15121622e-06  norm(t1,t2) = 8.5697e-06
+cycle = 14  E_corr(RCCSD) = -2.85126489860479  dE = -3.42702772e-07  norm(t1,t2) = 3.65007e-06
+RCCSD converged
+E(RCCSD) = -992.453833074122  E_corr = -2.851264898604792

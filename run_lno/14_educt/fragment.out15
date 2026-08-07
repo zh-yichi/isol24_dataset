@@ -1,0 +1,128 @@
+
+LNO-AFQMC Started
+Hostname:     gpue04.delta.ncsa.illinois.edu
+System:       Linux
+Node:         gpue04.delta.ncsa.illinois.edu
+Release:      5.14.0-427.91.1.el9_4.x86_64
+Machine:      x86_64
+Processor:    x86_64
+JAX backend:  GPU
+JAX devices:  [CudaDevice(id=0)]
+Device kind:  NVIDIA H200
+Platform:     gpu
+
+QMC Parameters
+eql_time        -         40
+n_prop_steps    -         50
+n_blocks        -        600
+n_walkers       -        300
+mix_precision   -       True
+max_memory      -     100000
+seed            -       1171
+walker_type     -        rhf
+trial           -    pt2ccsd
+max_error       -    9.8e-05
+dt              -      0.005
+n_exp_terms     -          6
+n_batch         -          1
+nchol_chunk     -        100
+free_projection -      False
+
+QMC System
+Number of Occ. Orbitals:      19
+Number of Act. Orbitals:      106
+Number of Chol. Vectors:      752
+Mean-Field Energy:            -648.18389468
+Maximum memory per walker:            333.33 MB
+Maximum number of Cholesky per chunk: 1944
+Number of Cholesky chunks:            1
+Number of Cholesky per chunk:         752
+Number of padding Cholesky:           0
+
+Initalize QMC walkers by HF
+
+Equilibration
+Initial Orbital energy: -0.02022
+inv_T  nodes      weight      energy     error   runTime
+ 0.00      0   300.00000  -648.18389   0.00000     14.54
+ 4.00      0   303.05111  -649.18020   0.02465     19.42
+ 8.00      0   298.75245  -649.12733   0.02305     20.85
+12.00      0   298.23750  -649.16354   0.02363     22.29
+16.00      0   299.73850  -649.18940   0.02522     23.72
+20.00      0   299.51319  -649.22639   0.02709     25.15
+24.00      0   299.71931  -649.22201   0.03057     26.58
+28.00      0   299.22945  -649.17864   0.02321     28.01
+32.00      0   298.87382  -649.17198   0.02368     29.44
+36.00      0   297.80345  -649.17473   0.02519     30.87
+40.00      0   298.86273  -649.16681   0.02471     32.30
+
+Sampling Blocks
+Target Final Error ~ 0.000098
+   N  nodes      weight      E(Guide)     Error     weightp    E_frag     Error      Time
+  20      0   298.74719    -649.14896   0.00395   305.33646  -0.02081   0.00005     40.98
+  40      0   298.83341    -649.14660   0.00319   305.52152  -0.02085   0.00004     45.25
+  60      0   298.16782    -649.14688   0.00294   305.37431  -0.02086   0.00004     49.21
+  80      0   298.45532    -649.15289   0.00283   305.33180  -0.02086   0.00003     53.19
+ 100      0   298.75868    -649.15430   0.00250   305.34216  -0.02089   0.00003     57.17
+ 120      0   299.19680    -649.15843   0.00246   305.43469  -0.02088   0.00003     61.13
+ 140      0   299.68752    -649.15825   0.00219   305.42615  -0.02088   0.00002     65.09
+
+Post Propagation
+Total number of samples 140
+Remove Outliers
+Remove samples outside Zeta > 30
+Outlier bound [-0.02699, -0.01470]
+Removed 0 Outliers
+Outliers Energy []
+Warning: small dataset, relaxed min_nblocks to 14
+nsample = 140, max_block_size = 10, min_nblocks = 14
+   B    NB    NS  Observable     Error    dError
+   1   140   140  -649.15823   0.00218   0.00013
+   2    70   140  -649.15823   0.00273   0.00023
+   3    46   138  -649.15824   0.00298   0.00031
+   4    35   140  -649.15824   0.00306   0.00037
+   5    28   140  -649.15824   0.00315   0.00043
+   6    23   138  -649.15824   0.00333   0.00050
+   7    20   140  -649.15824   0.00339   0.00055
+   8    17   136  -649.15847   0.00360   0.00064
+   9    15   135  -649.15838   0.00360   0.00068
+  10    14   140  -649.15824   0.00388   0.00076
+Fit (variance): plateau_var = 1.342e-05 ± 4.308e-06
+Fit (error):    plateau = 0.00366 ± 0.00059
+     autocorrelation length ~ 3.4 blocks
+     plateau reached at block size ~ 16
+Warning: small dataset, relaxed min_nblocks to 14
+nsample = 140, max_block_size = 10, min_nblocks = 14
+Blk_SZ   NBlk   NSmp      Energy     Error    dError
+     1    140    140    -0.02087   0.00002   0.00000
+     2     70    140    -0.02087   0.00003   0.00000
+     3     46    138    -0.02087   0.00003   0.00000
+     4     35    140    -0.02087   0.00003   0.00000
+     5     28    140    -0.02088   0.00003   0.00000
+     6     23    138    -0.02087   0.00003   0.00000
+     7     20    140    -0.02088   0.00003   0.00001
+     8     17    136    -0.02087   0.00003   0.00001
+     9     15    135    -0.02087   0.00003   0.00000
+    10     14    140    -0.02088   0.00003   0.00001
+Fit (variance): plateau_var = 8.03604e-10 ± 1.10855e-10
+Fit (error):    plateau = 0.00003 ± 0.00000
+     autocorrelation length ~ 1.1 blocks
+     plateau reached at block size ~ 5
+Final AFQMC/HF Guiding Energy:      -649.1582 +/- 0.0037
+Final AFQMC/pt2CCSD Orbital Energy: -0.02088 +/- 0.00003
+<t1> = weightp/weight = 1.02288
+Total run time: 65.10
+
+AFQMC Sampling Finished
+
+
+============================== Fragment15 Results ==============================
+	 LNO Center H
+--------------------------------------------------------------------------------
+	 LNO-Active Space electrons: 19 | orbitals: 106 
+	 LNO-MP2 Orbital Energy:   -0.01825833 
+	 LNO-CCSD Orbital Energy:  -0.02021767 
+	 LNO-AFQMC Orbital Energy: -0.02088 +/- 0.00003 
+	 LNO-CCSD Time:  13.22 
+	 LNO-AFQMC Time: 96.34 
+================================================================================

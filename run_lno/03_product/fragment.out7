@@ -1,0 +1,140 @@
+
+LNO-AFQMC Started
+Hostname:     gpue04.delta.ncsa.illinois.edu
+System:       Linux
+Node:         gpue04.delta.ncsa.illinois.edu
+Release:      5.14.0-427.91.1.el9_4.x86_64
+Machine:      x86_64
+Processor:    x86_64
+JAX backend:  GPU
+JAX devices:  [CudaDevice(id=0)]
+Device kind:  NVIDIA H200
+Platform:     gpu
+
+QMC Parameters
+eql_time        -         40
+n_prop_steps    -         50
+n_blocks        -        600
+n_walkers       -        300
+mix_precision   -       True
+max_memory      -     100000
+seed            -       2392
+walker_type     -        rhf
+trial           -    pt2ccsd
+max_error       -     0.0001
+dt              -      0.005
+n_exp_terms     -          6
+n_batch         -          1
+nchol_chunk     -        100
+free_projection -      False
+
+QMC System
+Number of Occ. Orbitals:      35
+Number of Act. Orbitals:      192
+Number of Chol. Vectors:      1034
+Mean-Field Energy:            -683.38031968
+Maximum memory per walker:            333.33 MB
+Maximum number of Cholesky per chunk: 592
+Number of Cholesky chunks:            2
+Number of Cholesky per chunk:         517
+Number of padding Cholesky:           0
+
+Initalize QMC walkers by HF
+
+Equilibration
+Initial Orbital energy: -0.10955
+inv_T  nodes      weight      energy     error   runTime
+ 0.00      0   300.00000  -683.38035   0.00000     20.40
+ 4.00      0   306.37564  -685.35258   0.03720     27.38
+ 8.00      0   298.19227  -685.38538   0.03917     31.38
+12.00      0   297.48166  -685.30684   0.03731     35.40
+16.00      0   298.29542  -685.34743   0.03290     39.41
+20.00      0   298.54829  -685.40359   0.04034     43.43
+24.00      0   297.92907  -685.37297   0.04061     47.47
+28.00      0   296.54798  -685.30468   0.03679     51.49
+32.00      0   296.41164  -685.25706   0.03293     55.51
+36.00      0   296.83668  -685.34646   0.03872     60.13
+40.00      0   297.37853  -685.29603   0.03421     64.13
+
+Sampling Blocks
+Target Final Error ~ 0.000102
+   N  nodes      weight      E(Guide)     Error     weightp    E_frag     Error      Time
+  20      0   298.23640    -685.31360   0.00901   303.81634  -0.11362   0.00034     98.02
+  40      0   297.86376    -685.32735   0.00664   303.99878  -0.11373   0.00021    127.25
+  60      0   297.05299    -685.33033   0.00524   304.10010  -0.11392   0.00016    156.27
+  80      0   298.47713    -685.32874   0.00434   304.16323  -0.11390   0.00015    185.51
+ 100      0   297.09244    -685.32695   0.00387   304.21308  -0.11393   0.00013    214.51
+ 120      0   297.08039    -685.32434   0.00348   304.28051  -0.11393   0.00012    243.54
+ 140      0   299.38204    -685.32381   0.00325   304.25006  -0.11392   0.00010    272.51
+ 160      0   296.88399    -685.32505   0.00311   304.16786  -0.11388   0.00010    301.54
+ 180      0   298.31480    -685.32608   0.00290   304.16708  -0.11386   0.00009    330.57
+ 200      0   297.16805    -685.32853   0.00273   304.13908  -0.11383   0.00009    359.59
+ 220      0   297.30805    -685.32627   0.00264   304.14724  -0.11382   0.00008    388.61
+ 240      0   298.60808    -685.32805   0.00250   304.16462  -0.11383   0.00008    417.63
+ 260      0   295.72844    -685.32895   0.00237   304.17293  -0.11381   0.00008    446.67
+
+Post Propagation
+Total number of samples 260
+Remove Outliers
+Remove samples outside Zeta > 30
+Outlier bound [-0.14775, -0.07979]
+Removed 0 Outliers
+Outliers Energy []
+nsample = 260, max_block_size = 13, min_nblocks = 20
+   B    NB    NS  Observable     Error    dError
+   1   260   260  -685.32890   0.00237   0.00010
+   2   130   260  -685.32891   0.00288   0.00018
+   3    86   258  -685.32910   0.00332   0.00025
+   4    65   260  -685.32892   0.00352   0.00031
+   5    52   260  -685.32892   0.00386   0.00038
+   6    43   258  -685.32911   0.00391   0.00043
+   7    37   259  -685.32903   0.00364   0.00043
+   8    32   256  -685.32917   0.00408   0.00052
+   9    28   252  -685.32902   0.00408   0.00056
+  10    26   260  -685.32894   0.00399   0.00056
+  11    23   253  -685.32922   0.00428   0.00065
+  12    21   252  -685.32902   0.00436   0.00069
+  13    20   260  -685.32895   0.00391   0.00063
+Fit (variance): plateau_var = 1.749e-05 ± 2.908e-06
+Fit (error):    plateau = 0.00418 ± 0.00035
+     autocorrelation length ~ 3.5 blocks
+     plateau reached at block size ~ 16
+nsample = 260, max_block_size = 13, min_nblocks = 20
+Blk_SZ   NBlk   NSmp      Energy     Error    dError
+     1    260    260    -0.11380   0.00007   0.00000
+     2    130    260    -0.11380   0.00008   0.00001
+     3     86    258    -0.11381   0.00008   0.00001
+     4     65    260    -0.11381   0.00008   0.00001
+     5     52    260    -0.11380   0.00008   0.00001
+     6     43    258    -0.11382   0.00008   0.00001
+     7     37    259    -0.11382   0.00008   0.00001
+     8     32    256    -0.11382   0.00007   0.00001
+     9     28    252    -0.11383   0.00007   0.00001
+    10     26    260    -0.11381   0.00007   0.00001
+    11     23    253    -0.11382   0.00008   0.00001
+    12     21    252    -0.11382   0.00006   0.00001
+    13     20    260    -0.11381   0.00008   0.00001
+Fit (variance): plateau_var = -5.63116e-06 ± 7.50011e-02
+Fit (error):    plateau = nan ± nan
+     autocorrelation length ~ 54802.1 blocks
+     plateau reached at block size ~ 252434
+     !!!Failed to reach plateau in blocking
+     Return max block error
+Final AFQMC/HF Guiding Energy:      -685.3290 +/- 0.0042
+Final AFQMC/pt2CCSD Orbital Energy: -0.11381 +/- 0.00008
+<t1> = weightp/weight = 1.02306
+Total run time: 446.70
+
+AFQMC Sampling Finished
+
+
+============================== Fragment7 Results ===============================
+	 LNO Center C
+--------------------------------------------------------------------------------
+	 LNO-Active Space electrons: 35 | orbitals: 192 
+	 LNO-MP2 Orbital Energy:   -0.10328287 
+	 LNO-CCSD Orbital Energy:  -0.10955181 
+	 LNO-AFQMC Orbital Energy: -0.11381 +/- 0.00008 
+	 LNO-CCSD Time:  143.15 
+	 LNO-AFQMC Time: 458.22 
+================================================================================

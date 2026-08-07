@@ -1,0 +1,141 @@
+
+LNO-AFQMC Started
+Hostname:     gpue04.delta.ncsa.illinois.edu
+System:       Linux
+Node:         gpue04.delta.ncsa.illinois.edu
+Release:      5.14.0-427.91.1.el9_4.x86_64
+Machine:      x86_64
+Processor:    x86_64
+JAX backend:  GPU
+JAX devices:  [CudaDevice(id=0)]
+Device kind:  NVIDIA H200
+Platform:     gpu
+
+QMC Parameters
+eql_time        -         40
+n_prop_steps    -         50
+n_blocks        -        600
+n_walkers       -        300
+mix_precision   -       True
+max_memory      -     100000
+seed            -        980
+walker_type     -        rhf
+trial           -    pt2ccsd
+max_error       -     0.0001
+dt              -      0.005
+n_exp_terms     -          6
+n_batch         -          1
+nchol_chunk     -        100
+free_projection -      False
+
+QMC System
+Number of Occ. Orbitals:      27
+Number of Act. Orbitals:      146
+Number of Chol. Vectors:      917
+Mean-Field Energy:            -683.38031968
+Maximum memory per walker:            333.33 MB
+Maximum number of Cholesky per chunk: 1024
+Number of Cholesky chunks:            1
+Number of Cholesky per chunk:         917
+Number of padding Cholesky:           0
+
+Initalize QMC walkers by HF
+
+Equilibration
+Initial Orbital energy: -0.10583
+inv_T  nodes      weight      energy     error   runTime
+ 0.00      0   300.00000  -683.38033   0.00000     19.68
+ 4.00      0   302.99665  -684.70662   0.02589     26.13
+ 8.00      0   298.25345  -684.72288   0.02731     28.47
+12.00      0   300.26078  -684.79042   0.03126     30.80
+16.00      0   298.93820  -684.68215   0.02855     33.14
+20.00      0   297.70864  -684.72916   0.03400     35.47
+24.00      0   298.55884  -684.73293   0.02979     37.80
+28.00      0   297.62668  -684.71221   0.02592     40.14
+32.00      0   298.15156  -684.78736   0.03253     42.47
+36.00      0   298.75750  -684.77409   0.03158     44.81
+40.00      0   297.91230  -684.75676   0.02996     47.14
+
+Sampling Blocks
+Target Final Error ~ 0.000102
+   N  nodes      weight      E(Guide)     Error     weightp    E_frag     Error      Time
+  20      0   297.37228    -684.75336   0.00911   302.05283  -0.11022   0.00045     63.55
+  40      0   298.80741    -684.74137   0.00615   301.98837  -0.10998   0.00029     75.02
+  60      0   299.25774    -684.73865   0.00456   302.14301  -0.10979   0.00021     86.22
+  80      0   297.76369    -684.73551   0.00398   302.13522  -0.10959   0.00017     97.42
+ 100      0   299.43927    -684.73162   0.00342   302.13871  -0.10955   0.00014    108.63
+ 120      0   299.46753    -684.72931   0.00316   302.14370  -0.10948   0.00013    119.85
+ 140      0   298.56010    -684.72727   0.00293   302.18392  -0.10951   0.00012    131.05
+ 160      0   298.87920    -684.72932   0.00286   302.13796  -0.10952   0.00011    142.26
+ 180      0   298.62543    -684.73042   0.00269   302.10532  -0.10946   0.00010    153.45
+ 200      0   298.33992    -684.73128   0.00253   302.11753  -0.10947   0.00009    164.65
+ 220      0   298.68613    -684.73152   0.00242   302.11462  -0.10948   0.00009    176.03
+ 240      0   298.60147    -684.73258   0.00233   302.10114  -0.10950   0.00008    187.23
+ 260      0   297.51307    -684.73272   0.00228   302.11349  -0.10951   0.00008    198.45
+ 280      0   299.19118    -684.73221   0.00218   302.14225  -0.10953   0.00008    209.69
+
+Post Propagation
+Total number of samples 280
+Remove Outliers
+Remove samples outside Zeta > 30
+Outlier bound [-0.14078, -0.07785]
+Removed 0 Outliers
+Outliers Energy []
+nsample = 280, max_block_size = 14, min_nblocks = 20
+   B    NB    NS  Observable     Error    dError
+   1   280   280  -684.73216   0.00217   0.00009
+   2   140   280  -684.73218   0.00259   0.00016
+   3    93   279  -684.73222   0.00293   0.00022
+   4    70   280  -684.73219   0.00283   0.00024
+   5    56   280  -684.73220   0.00284   0.00027
+   6    46   276  -684.73213   0.00304   0.00032
+   7    40   280  -684.73220   0.00299   0.00034
+   8    35   280  -684.73220   0.00318   0.00039
+   9    31   279  -684.73224   0.00344   0.00044
+  10    28   280  -684.73221   0.00291   0.00040
+  11    25   275  -684.73210   0.00333   0.00048
+  12    23   276  -684.73214   0.00333   0.00050
+  13    21   273  -684.73233   0.00339   0.00054
+  14    20   280  -684.73221   0.00328   0.00053
+Fit (variance): plateau_var = 1.006e-05 ± 1.192e-06
+Fit (error):    plateau = 0.00317 ± 0.00019
+     autocorrelation length ~ 2.4 blocks
+     plateau reached at block size ~ 11
+nsample = 280, max_block_size = 14, min_nblocks = 20
+Blk_SZ   NBlk   NSmp      Energy     Error    dError
+     1    280    280    -0.10950   0.00007   0.00000
+     2    140    280    -0.10950   0.00009   0.00001
+     3     93    279    -0.10951   0.00010   0.00001
+     4     70    280    -0.10951   0.00010   0.00001
+     5     56    280    -0.10951   0.00010   0.00001
+     6     46    276    -0.10949   0.00010   0.00001
+     7     40    280    -0.10951   0.00011   0.00001
+     8     35    280    -0.10951   0.00010   0.00001
+     9     31    279    -0.10951   0.00011   0.00001
+    10     28    280    -0.10952   0.00012   0.00002
+    11     25    275    -0.10950   0.00012   0.00002
+    12     23    276    -0.10950   0.00011   0.00002
+    13     21    273    -0.10950   0.00010   0.00002
+    14     20    280    -0.10952   0.00012   0.00002
+Fit (variance): plateau_var = 1.19526e-08 ± 1.64197e-09
+Fit (error):    plateau = 0.00011 ± 0.00001
+     autocorrelation length ~ 2.9 blocks
+     plateau reached at block size ~ 13
+Final AFQMC/HF Guiding Energy:      -684.7322 +/- 0.0032
+Final AFQMC/pt2CCSD Orbital Energy: -0.10953 +/- 0.00011
+<t1> = weightp/weight = 1.01322
+Total run time: 209.69
+
+AFQMC Sampling Finished
+
+
+============================== Fragment11 Results ==============================
+	 LNO Center C
+--------------------------------------------------------------------------------
+	 LNO-Active Space electrons: 27 | orbitals: 146 
+	 LNO-MP2 Orbital Energy:   -0.09751032 
+	 LNO-CCSD Orbital Energy:  -0.10583505 
+	 LNO-AFQMC Orbital Energy: -0.10953 +/- 0.00011 
+	 LNO-CCSD Time:  36.86 
+	 LNO-AFQMC Time: 221.49 
+================================================================================

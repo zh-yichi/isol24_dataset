@@ -1,0 +1,37 @@
+=======================================================================================================================================================================================
+ ISOL24 : DF-RHF / LNO-AFQMC summary
+=======================================================================================================================================================================================
+ generated : 2026-08-05 21:52:43
+ geometry  : /work/hdd/bdka/yzhang65/isol24_dataset/geometry/small
+ basis     : ccpvdz         auxbasis : default JK-fit         charge : +0  (overrides: 24 +1)
+ scf       : DF-RHF, conv_tol=1.0e-10, stability loop (max 10 cycles, second-order restart)
+ lno       : IAO fragments (atom-centred), thresh=1e-06, frozen : auto
+ afqmc     : chol_cut=1.0e-05, target_sto_error=5.0e-04, eql_time=40, max_memory=100000, mix_precision=True, n_blocks=600, n_prop_steps=50, n_walkers=300, seed=17, trial=pt2ccsd, walker_type=rhf
+ E(LNO-*) are total energies, E(RHF) + the fragment-summed
+ LNO correlation energy; t_cc / t_qmc are summed over the
+ fragments.  Energies in Hartree, times in seconds.
+
+molecule         formula       chg   nao   nel  frz  stab  nfrg   LAS             E(RHF)         E(LNO-MP2)        E(LNO-CCSD)     E(LNO-AFQMC)       err     t_scf      t_cc     t_qmc
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+03_educt         C6H12O6        +0   228    96   12   yes    24   189    -683.3957900509    -685.3363887209    -685.4172987209       -685.48058   0.00047      15.9    1043.3    7127.3
+03_product       C6H12O6        +0   228    96   12   yes    24   192    -683.3803196850    -685.3288860250    -685.4085816650       -685.47463   0.00048       7.8     957.1    6514.2
+09_educt         C12H20         +0   268    92   12   yes    32   220    -466.1295226814    -467.8311403514    -467.9549357114       -468.02421   0.00038      11.8    2105.2   14044.6
+09_product       C12H20         +0   268    92   12   yes    32   223    -466.0971846428    -467.7930844328    -467.9192623228       -467.98777   0.00034      14.7    1627.7   11792.3
+13_educt         C12H12N2       +0   256    98   14   yes    26   204    -570.3569335886    -572.2583319686    -572.3297555486       -572.42120   0.00044       7.5    1647.2   11934.0
+13_product       C12H12N2       +0   256    98   14   yes    26   189    -570.3134488949    -572.2065650849    -572.2843758249       -572.37640   0.00046       9.0    1032.5    8368.3
+14_educt         C11H12O3       +0   256   102   14   yes    26   215    -648.1838946774    -650.1954135174    -650.2736451974       -650.36240   0.00063       9.4    2072.3   13850.5
+14_product       C11H12O3       +0   256   102   14   yes    26   212    -648.1833557917    -650.1879902917    -650.2678573617       -650.35470   0.00059       7.5    1729.5   12918.7
+10_educt         C14H20O      FAILED: cannot access local variable 'eorb_afqmc' where it is not associated with a value
+10_product       C14H20O      FAILED: cannot access local variable 'eorb_afqmc' where it is not associated with a value
+20_educt         C14H12F2     FAILED: cannot access local variable 'eorb_afqmc' where it is not associated with a value
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ Isomerization energies, E(product) - E(educt), kcal/mol
+
+reaction   formula             dE(RHF)    dE(LNO-MP2)   dE(LNO-CCSD)  dE(LNO-AFQMC)       err
+---------------------------------------------------------------------------------------------
+03         C6H12O6              9.7078         4.7080         5.4700         3.7339    0.4216
+09         C12H20              20.2924        23.8804        22.3854        22.8652    0.3200
+13         C12H12N2            27.2871        32.4842        28.4762        28.1154    0.3994
+14         C11H12O3             0.3382         4.6581         3.6319         4.8374    0.5416
+---------------------------------------------------------------------------------------------

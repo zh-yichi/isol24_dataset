@@ -1,0 +1,1598 @@
+#INFO: **** input file is /work/hdd/bdka/yzhang65/isol24_dataset/lno_script/run_lnoafqmc.py ****
+#!/usr/bin/env python
+"""DF-RHF -> LNO-AFQMC for the ISOL24 geometries.
+
+For every requested .xyz file the script
+
+  1. converges a density-fitted RHF and drives it to an internally stable
+     solution with the second-order (Newton/CIAH) solver,
+  2. builds IAO local orbitals / atom-centred fragments and runs LNO-AFQMC,
+     which also gives LNO-MP2 and LNO-CCSD correlation energies for free,
+
+and collects everything into a single, human-readable `summary_lno.out`.
+
+Each molecule runs inside its own working directory, because the LNO driver
+reads/writes `options.bin`, `FCIDUMP_chol`, `amplitudes.npz`, `fragment.out<n>`
+and `lno_result.out` in the current directory.
+
+Everything is configured in the SETTINGS block below; just run
+
+    python run_rhf_lnoafqmc.py
+"""
+
+import os
+
+os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")
+
+import jax
+
+jax.config.update("jax_enable_x64", True)
+
+import glob
+import re
+import time
+import traceback
+from collections import Counter
+from datetime import datetime
+
+from pyscf import gto, scf, lib
+from pyscf.data import elements
+
+# ----------------------------------------------------------------------------
+# SETTINGS -- edit these
+# ----------------------------------------------------------------------------
+# Directory holding the .xyz files.  Relative paths are resolved with respect to
+# this script, so it works no matter where you launch it from.
+GEOM_DIR = '../geometry/small'
+
+# Which molecule(s) to run -- no '.xyz' needed:
+#                            'all'  -> every .xyz in GEOM_DIR
+#                            a name -> '03_educt'
+#                            a list -> ['03_educt', '03_product']
+MOLECULES = 'all'
+
+# Order used when MOLECULES == 'all':  'name' or 'size' (fewest heavy atoms
+# first, so the cheap jobs finish first).
+ORDER = 'size'
+
+BASIS = 'ccpvdz'      # orbital basis
+AUXBASIS = None        # DF auxiliary basis; None -> matching JK-fit set
+CHARGE = 0             # default charge, overridden per molecule by CHARGES
+UNIT = 'Angstrom'      # unit of the coordinates in the .xyz files
+
+# Per-molecule charges.  A key is either a full name ('24_educt') or just the
+# reaction number ('24'), which then covers both the educt and the product.
+# Reaction 24 (C18H33Si) is a cation: neutral would have an odd electron count.
+CHARGES = {
+    '24': 1,
+}
+
+CONV_TOL = 1e-10       # SCF energy convergence
+MAX_STAB_CYCLE = 10    # max stability-check / restart iterations
+CHECK_EXTERNAL = False # also run the external (RHF -> UHF) stability check
+
+# --- LNO settings -----------------------------------------------------------
+DO_LNO_AFQMC = True
+LNO_THRESH = 1e-6      # a float -> [10*thresh, thresh]; a pair -> used as is
+FROZEN = 'auto'        # 'auto' -> elements.chemcore(mol); an int -> that many
+                       # frozen core orbitals; 0 -> all-electron
+CHOL_CUT = 1e-5        # Cholesky decomposition threshold for the integrals
+TARGET_STO_ERROR = 5e-4  # target stochastic error of the *total* correlation
+                         # energy; split over the fragments by the driver
+AFQMC_OPTIONS = {
+    'eql_time': 40,
+    'n_prop_steps': 50,
+    'n_blocks': 600,
+    'n_walkers': 300,
+    'mix_precision': True,
+    'max_memory': 100000,
+    'seed': 17,
+    'walker_type': 'rhf',
+    'trial': 'pt2ccsd',
+}
+
+MAX_MEMORY = 200000     # MB, for the pyscf part
+VERBOSE = 4            # PySCF print level
+WORKDIR = '../run_lno' # one sub-directory per molecule is created here
+SUMMARY = 'summary_lno.out'     # written inside WORKDIR
+SKIP_EXISTING = True   # skip molecules whose work directory already holds a
+                       # finished result (lets you resume an interrupted batch)
+# ----------------------------------------------------------------------------
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+HARTREE2KCAL = 627.5094740631
+LNO_OUT = 'lno_result.out'
+
+
+def _resolve(path):
+    """Resolve `path` relative to this script's directory."""
+    return path if os.path.isabs(path) else os.path.normpath(os.path.join(HERE, path))
+
+
+def read_xyz(path):
+    """Return (atom list for gto.Mole, comment line) from an .xyz file."""
+    with open(path) as fh:
+        lines = fh.read().splitlines()
+
+    natm = int(lines[0].split()[0])
+    comment = lines[1].strip() if len(lines) > 1 else ''
+
+    atoms = []
+    for line in lines[2:]:
+        if not line.strip():
+            continue
+        sym, x, y, z = line.split()[:4]
+        atoms.append((sym, (float(x), float(y), float(z))))
+
+    if len(atoms) != natm:
+        raise ValueError('%s: header says %d atoms, found %d'
+                         % (path, natm, len(atoms)))
+    return atoms, comment
+
+
+def formula(atoms):
+    """Molecular formula in Hill notation."""
+    c = Counter(sym for sym, _ in atoms)
+    keys = ['C', 'H'] + sorted(k for k in c if k not in ('C', 'H'))
+    return ''.join(k + (str(c[k]) if c[k] > 1 else '') for k in keys if k in c)
+
+
+def n_heavy(atoms):
+    return sum(1 for sym, _ in atoms if sym != 'H')
+
+
+def charge_of(tag):
+    """Charge for molecule `tag`: an entry for the full name wins over one for
+    the bare reaction number, which in turn wins over the global default."""
+    if tag in CHARGES:
+        return CHARGES[tag]
+    return CHARGES.get(tag.split('_')[0], CHARGE)
+
+
+def build_mol(path, tag, output=None):
+    """Return (mol, comment, formula).  The metadata is kept outside the Mole
+    object so that pyscf's check_sanity does not complain about it."""
+    atoms, comment = read_xyz(path)
+    charge = charge_of(tag)
+
+    # catch a bad charge here, with a clearer message than pyscf's
+    nelec = sum(gto.charge(sym) for sym, _ in atoms) - charge
+    if nelec % 2:
+        raise ValueError('%s: %d electrons at charge %+d is open shell; RHF '
+                         'needs an even count -- set CHARGES[%r]'
+                         % (tag, nelec, charge, tag))
+
+    mol = gto.M(atom=atoms, basis=BASIS, charge=charge, spin=0, unit=UNIT,
+                max_memory=MAX_MEMORY, verbose=VERBOSE, output=output)
+    return mol, comment, formula(atoms)
+
+
+def run_stable_rhf(mol, chkfile=None):
+    """DF-RHF driven until the solution is internally stable.
+
+    Returns (mf, stable, n_cycle) where `mf` is the final mean-field object.
+    """
+    mf = scf.RHF(mol).density_fit(auxbasis=AUXBASIS)
+    mf.conv_tol = CONV_TOL
+    if chkfile:
+        mf.chkfile = chkfile
+    mf.kernel()
+
+    second_order = False
+    stable = False
+    for cycle in range(1, MAX_STAB_CYCLE + 1):
+        mo_i, mo_e, stable_i, stable_e = mf.stability(
+            internal=True, external=CHECK_EXTERNAL, return_status=True)
+
+        if CHECK_EXTERNAL and not stable_e:
+            lib.logger.warn(mf, 'External instability (RHF -> UHF/complex) '
+                                'detected; an unrestricted reference may be '
+                                'lower in energy.')
+
+        if stable_i and mf.converged:
+            stable = True
+            lib.logger.note(mf, 'Stable RHF solution after %d stability '
+                                'cycle(s), E = %.12f', cycle, mf.e_tot)
+            break
+
+        lib.logger.note(mf, 'Cycle %d: internal instability (or unconverged '
+                            'SCF); rotating orbitals and restarting with the '
+                            'second-order solver.', cycle)
+
+        mo_occ = mf.mo_occ
+        if not second_order:
+            # Newton/CIAH on top of the DF-RHF object; density fitting is kept.
+            mf = mf.newton()
+            second_order = True
+        mf.kernel(mo_i, mo_occ)
+    else:
+        lib.logger.warn(mf, 'No stable solution after %d stability cycles.',
+                        MAX_STAB_CYCLE)
+
+    return mf, stable, cycle
+
+
+def n_frozen(mol):
+    """Number of frozen core orbitals for this molecule."""
+    return elements.chemcore(mol) if FROZEN == 'auto' else int(FROZEN or 0)
+
+
+def run_lno_afqmc(mf):
+    """IAO fragments + LNO-AFQMC in the current directory.
+
+    Returns (parsed lno_result.out, number of fragments).
+    """
+    from afqmc.lno_afqmc import lno_afqmc, tools
+
+    lo_coeff, frag_lolist, atm_center = tools.iao_localization(mf)
+
+    lno_afqmc.run_afqmc(
+        mf,
+        lo_coeff=lo_coeff,
+        frag_lolist=frag_lolist,
+        nfrozen=n_frozen(mf.mol),
+        thresh=LNO_THRESH,
+        qmc_options=dict(AFQMC_OPTIONS),
+        chol_cut=CHOL_CUT,
+        target_sto_error=TARGET_STO_ERROR,
+        run_frag_list=None,
+        atom_group=atm_center,
+    )
+    return parse_lno_out(LNO_OUT), len(frag_lolist)
+
+
+# 'LNO-Thresh' summary row, e.g.
+#   [1.00e-04, 1.00e-05]        8  -0.23137630  -0.20887179  -0.21126  0.00122 ...
+_SUMMARY_RE = re.compile(r'^\s*(\[[^\]]*\])\s+(\d+)\s+'
+                         r'(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+'
+                         r'(-?\d+\.\d+)\s+(\d+\.\d+)\s+'
+                         r'(\d+\.\d+)\s+(\d+\.\d+)\s*$')
+# per-fragment row: index, LAS centre, LAS size, then the six numbers
+_FRAG_RE = re.compile(r'^\s*(\d+)\s+(\S+)\s+(\d+)\s+'
+                      r'(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+'
+                      r'(-?\d+\.\d+)\s+(\d+\.\d+)\s+'
+                      r'(\d+\.\d+)\s+(\d+\.\d+)\s*$')
+
+
+def parse_lno_out(path):
+    """Pull the fragment-summed energies out of an lno_result.out.
+
+    Returns a dict with the LNO *correlation* energies ('e_mp2', 'e_ccsd',
+    'e_afqmc', 'e_afqmc_err'), the LNO thresholds, the largest active space and
+    the accumulated timings -- empty if the file has no complete summary.
+    """
+    found = {}
+    if not os.path.isfile(path):
+        return found
+
+    nfrag = 0
+    with open(path) as fh:
+        for line in fh:
+            m = _SUMMARY_RE.match(line)
+            if m:
+                found.update(lno_thresh=m.group(1), max_las=int(m.group(2)),
+                             e_mp2=float(m.group(3)), e_ccsd=float(m.group(4)),
+                             e_afqmc=float(m.group(5)),
+                             e_afqmc_err=float(m.group(6)),
+                             t_cc=float(m.group(7)), t_qmc=float(m.group(8)))
+            elif _FRAG_RE.match(line):
+                nfrag += 1
+    if found:
+        found['nfrag'] = nfrag
+    return found
+
+
+def parse_scf_energy(path):
+    """Converged SCF energy from a pyscf output file, or None."""
+    energy = None
+    if not os.path.isfile(path):
+        return energy
+    with open(path) as fh:
+        for line in fh:
+            m = re.search(r'converged SCF energy = (-?\d+\.\d+)', line)
+            if m:
+                energy = float(m.group(1))
+    return energy
+
+
+def select_molecules(geom_dir):
+    """Turn the MOLECULES setting into an ordered list of tags (no extension).
+
+    A trailing '.xyz' is accepted but never required.
+    """
+    if isinstance(MOLECULES, str) and MOLECULES.lower() == 'all':
+        tags = [os.path.splitext(os.path.basename(p))[0]
+                for p in glob.glob(os.path.join(geom_dir, '*.xyz'))]
+        if ORDER == 'size':
+            def key(tag):
+                atoms, _ = read_xyz(os.path.join(geom_dir, tag + '.xyz'))
+                return (n_heavy(atoms), len(atoms), tag)
+            tags.sort(key=key)
+        else:
+            tags.sort()
+        return tags
+
+    names = [MOLECULES] if isinstance(MOLECULES, str) else list(MOLECULES)
+    return [os.path.splitext(os.path.basename(n))[0] for n in names]
+
+
+def _store_lno(res, energies, nfrag=None):
+    """Copy a parsed lno_result.out into a result dict, adding total energies."""
+    res.update(e_corr_mp2=energies['e_mp2'], e_corr_ccsd=energies['e_ccsd'],
+               e_corr_afqmc=energies['e_afqmc'],
+               e_afqmc_err=energies['e_afqmc_err'],
+               lno_thresh=energies['lno_thresh'], max_las=energies['max_las'],
+               nfrag=nfrag if nfrag is not None else energies.get('nfrag'),
+               t_cc=energies['t_cc'], t_qmc=energies['t_qmc'])
+    if 'e_rhf' in res:
+        res['e_mp2'] = res['e_rhf'] + energies['e_mp2']
+        res['e_ccsd'] = res['e_rhf'] + energies['e_ccsd']
+        res['e_afqmc'] = res['e_rhf'] + energies['e_afqmc']
+    return res
+
+
+def run_one(tag, geom_dir, workroot):
+    """Run RHF -> LNO-AFQMC for one geometry; returns a result dict."""
+    xyz = os.path.join(geom_dir, tag + '.xyz')
+    if not os.path.isfile(xyz):
+        raise IOError('geometry not found: %s' % xyz)
+
+    rundir = os.path.join(workroot, tag)
+    os.makedirs(rundir, exist_ok=True)
+
+    res = {'tag': tag, 'status': 'running'}
+    cwd = os.getcwd()
+    os.chdir(rundir)          # the LNO driver reads/writes in the current dir
+    try:
+        mol, comment, form = build_mol(xyz, tag, output=tag + '.out')
+        res.update(formula=form, natm=mol.natm, nao=mol.nao_nr(),
+                   nelec=mol.nelectron, charge=mol.charge,
+                   frozen=n_frozen(mol))
+        lib.logger.note(mol, 'Geometry : %s', xyz)
+        lib.logger.note(mol, 'Comment  : %s', comment)
+        lib.logger.note(mol, 'Atoms    : %d   charge: %+d   basis: %s   AOs: %d',
+                        mol.natm, mol.charge, BASIS, mol.nao_nr())
+
+        t0 = time.time()
+        mf, stable, ncycle = run_stable_rhf(mol, chkfile=tag + '.chk')
+        res.update(e_rhf=mf.e_tot, scf_converged=bool(mf.converged),
+                   stable=bool(stable), stab_cycles=ncycle,
+                   t_scf=time.time() - t0)
+
+        if DO_LNO_AFQMC:
+            t0 = time.time()
+            energies, nfrag = run_lno_afqmc(mf)
+            res['t_lno'] = time.time() - t0
+            if not energies:
+                raise RuntimeError('no LNO summary found in %s' % LNO_OUT)
+            _store_lno(res, energies, nfrag)
+
+        res['status'] = 'ok'
+    except Exception as err:                       # keep the batch going
+        res['status'] = 'FAILED: %s' % err
+        with open('traceback.txt', 'w') as fh:
+            fh.write(traceback.format_exc())
+        print('%-16s FAILED: %s' % (tag, err), flush=True)
+    finally:
+        os.chdir(cwd)
+
+    if res['status'] == 'ok':
+        print_result(res)
+    return res
+
+
+def load_one(tag, geom_dir, workroot):
+    """Rebuild the result dict of a finished run from the files it left behind.
+
+    Returns None when the run directory does not hold a complete result, so
+    that the caller can (re)run the molecule.
+    """
+    rundir = os.path.join(workroot, tag)
+    e_rhf = parse_scf_energy(os.path.join(rundir, tag + '.out'))
+    if e_rhf is None:
+        return None
+    energies = parse_lno_out(os.path.join(rundir, LNO_OUT))
+    if DO_LNO_AFQMC and not energies:
+        return None
+
+    atoms, _ = read_xyz(os.path.join(geom_dir, tag + '.xyz'))
+    res = {'tag': tag, 'status': 'ok', 'cached': True, 'e_rhf': e_rhf,
+           'formula': formula(atoms), 'natm': len(atoms),
+           'charge': charge_of(tag)}
+    if energies:
+        _store_lno(res, energies)
+    return res
+
+
+def print_result(res):
+    print('%-16s %-12s nao=%4s  E(RHF)=%18.10f  E(LNO-CCSD)=%18.10f  '
+          'E(LNO-AFQMC)=%s'
+          % (res['tag'], res.get('formula', ''), res.get('nao', '-'),
+             res.get('e_rhf', float('nan')),
+             res.get('e_ccsd', float('nan')),
+             ('%.5f +/- %.5f' % (res['e_afqmc'], res['e_afqmc_err']))
+             if 'e_afqmc' in res else 'n/a'), flush=True)
+
+
+# ----------------------------------------------------------------------------
+# summary
+# ----------------------------------------------------------------------------
+
+def _f(value, width=18, prec=10):
+    return ('%*.*f' % (width, prec, value)) if value is not None else \
+        '%*s' % (width, 'n/a')
+
+
+def write_summary(results, path, geom_dir):
+    """(Re)write the summary file from the results collected so far."""
+    cols = ('molecule', 'formula', 'chg', 'nao', 'nel', 'frz', 'stab', 'nfrg',
+            'LAS', 'E(RHF)', 'E(LNO-MP2)', 'E(LNO-CCSD)', 'E(LNO-AFQMC)',
+            'err', 't_scf', 't_cc', 't_qmc')
+    head = ('%-16s %-12s %4s %5s %5s %4s %5s %5s %5s %18s %18s %18s %16s %9s '
+            '%9s %9s %9s' % cols)
+
+    lines = []
+    lines.append('=' * len(head))
+    lines.append(' ISOL24 : DF-RHF / LNO-AFQMC summary')
+    lines.append('=' * len(head))
+    lines.append(' generated : %s' % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    lines.append(' geometry  : %s' % geom_dir)
+    lines.append(' basis     : %-14s auxbasis : %-22s charge : %+d%s'
+                 % (BASIS, AUXBASIS or 'default JK-fit', CHARGE,
+                    ('  (overrides: %s)'
+                     % ', '.join('%s %+d' % kv for kv in sorted(CHARGES.items())))
+                    if CHARGES else ''))
+    lines.append(' scf       : DF-RHF, conv_tol=%.1e, stability loop '
+                 '(max %d cycles, second-order restart)'
+                 % (CONV_TOL, MAX_STAB_CYCLE))
+    if DO_LNO_AFQMC:
+        lines.append(' lno       : IAO fragments (atom-centred), thresh=%s, '
+                     'frozen : %s' % (LNO_THRESH, FROZEN))
+        opt = ', '.join('%s=%s' % kv for kv in sorted(AFQMC_OPTIONS.items()))
+        lines.append(' afqmc     : chol_cut=%.1e, target_sto_error=%.1e, %s'
+                     % (CHOL_CUT, TARGET_STO_ERROR, opt))
+    lines.append(' E(LNO-*) are total energies, E(RHF) + the fragment-summed')
+    lines.append(' LNO correlation energy; t_cc / t_qmc are summed over the')
+    lines.append(' fragments.  Energies in Hartree, times in seconds.')
+    lines.append('')
+    lines.append(head)
+    lines.append('-' * len(head))
+
+    for r in results:
+        if r['status'] != 'ok':
+            lines.append('%-16s %-12s %s' % (r['tag'], r.get('formula', ''),
+                                             r['status']))
+            continue
+        lines.append(
+            '%-16s %-12s %+4d %5s %5s %4s %5s %5s %5s %s %s %s %s %s %9s %9s %9s'
+            % (r['tag'], r.get('formula', ''), r.get('charge', 0),
+               r.get('nao', '-'), r.get('nelec', '-'), r.get('frozen', '-'),
+               'yes' if r.get('stable') else ('-' if r.get('cached') else 'NO'),
+               r.get('nfrag', '-'), r.get('max_las', '-'),
+               _f(r.get('e_rhf')), _f(r.get('e_mp2')), _f(r.get('e_ccsd')),
+               _f(r.get('e_afqmc'), 16, 5), _f(r.get('e_afqmc_err'), 9, 5),
+               '%9.1f' % r['t_scf'] if 't_scf' in r else '%9s' % '-',
+               '%9.1f' % r['t_cc'] if 't_cc' in r else '%9s' % '-',
+               '%9.1f' % r['t_qmc'] if 't_qmc' in r else '%9s' % '-'))
+
+    lines.append('-' * len(head))
+
+    rxn = reaction_energies(results)
+    if rxn:
+        lines.append('')
+        lines.append(' Isomerization energies, E(product) - E(educt), kcal/mol')
+        rhead = ('%-10s %-12s %14s %14s %14s %14s %9s'
+                 % ('reaction', 'formula', 'dE(RHF)', 'dE(LNO-MP2)',
+                    'dE(LNO-CCSD)', 'dE(LNO-AFQMC)', 'err'))
+        lines.append('')
+        lines.append(rhead)
+        lines.append('-' * len(rhead))
+        for idx, form, d in rxn:
+            lines.append('%-10s %-12s %s %s %s %s %s'
+                         % (idx, form,
+                            _f(d.get('rhf'), 14, 4), _f(d.get('mp2'), 14, 4),
+                            _f(d.get('ccsd'), 14, 4),
+                            _f(d.get('afqmc'), 14, 4),
+                            _f(d.get('afqmc_err'), 9, 4)))
+        lines.append('-' * len(rhead))
+
+    with open(path, 'w') as fh:
+        fh.write('\n'.join(lines) + '\n')
+
+
+def reaction_energies(results):
+    """Pair up <n>_educt / <n>_product results and return the deltas."""
+    done = {r['tag']: r for r in results if r['status'] == 'ok'}
+    out = []
+    for tag in sorted(done):
+        if not tag.endswith('_educt'):
+            continue
+        idx = tag[:-len('_educt')]
+        prod = done.get(idx + '_product')
+        if prod is None:
+            continue
+        educt = done[tag]
+        d = {}
+        for key, name in (('e_rhf', 'rhf'), ('e_mp2', 'mp2'),
+                          ('e_ccsd', 'ccsd'), ('e_afqmc', 'afqmc')):
+            if key in educt and key in prod:
+                d[name] = (prod[key] - educt[key]) * HARTREE2KCAL
+        if 'e_afqmc_err' in educt and 'e_afqmc_err' in prod:
+            d['afqmc_err'] = ((educt['e_afqmc_err'] ** 2 +
+                               prod['e_afqmc_err'] ** 2) ** 0.5) * HARTREE2KCAL
+        out.append((idx, educt.get('formula', ''), d))
+    return out
+
+
+def main():
+    geom_dir = _resolve(GEOM_DIR)
+    workroot = _resolve(WORKDIR)
+    os.makedirs(workroot, exist_ok=True)
+    summary = os.path.join(workroot, SUMMARY)
+
+    tags = select_molecules(geom_dir)
+    print('%d molecule(s) to run from %s' % (len(tags), geom_dir), flush=True)
+
+    results = []
+    for i, tag in enumerate(tags, 1):
+        if SKIP_EXISTING:
+            cached = load_one(tag, geom_dir, workroot)
+            if cached is not None:
+                print('[%d/%d] %-16s already done, skipping'
+                      % (i, len(tags), tag), flush=True)
+                results.append(cached)
+                write_summary(results, summary, geom_dir)
+                continue
+
+        print('\n[%d/%d] %s' % (i, len(tags), tag), flush=True)
+        results.append(run_one(tag, geom_dir, workroot))
+        write_summary(results, summary, geom_dir)   # keep it up to date
+
+    write_summary(results, summary, geom_dir)
+    print('\nSummary written to %s' % summary, flush=True)
+    return results
+
+
+if __name__ == '__main__':
+    main()
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='gpue04.delta.ncsa.illinois.edu', release='5.14.0-427.91.1.el9_4.x86_64', version='#1 SMP PREEMPT_DYNAMIC Wed Sep 17 10:08:59 EDT 2025', machine='x86_64')  Threads 12
+Python 3.11.14 (main, Oct 21 2025, 18:31:21) [GCC 11.2.0]
+numpy 2.3.5  scipy 1.16.3  h5py 3.15.1
+Date: Wed Aug  5 16:08:00 2026
+PySCF version 2.11.0
+PySCF path  /u/yzhang65/myprojects/software/pyscf
+GIT HEAD (branch master) f520f5381c0b41f716d847009817cbc64e52c0d5
+
+[ENV] PYSCF_TMPDIR /projects/bdka/yzhang65/scratch/pyscf
+[ENV] PYSCF_EXT_PATH /u/yzhang65/myprojects/software/pyscf-forge
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 26
+[INPUT] num. electrons = 102
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = Angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 C     -1.356385026208   2.127626210777  -0.654007457008 AA   -2.563196218994   4.020630833815  -1.235894977168 Bohr   0.0
+[INPUT]  2 C     -2.652223747535   1.755630277820  -0.292766769955 AA   -5.011976503909   3.317660401074  -0.553249013588 Bohr   0.0
+[INPUT]  3 C     -2.905484929986   0.454054552819   0.153057904643 AA   -5.490570776725   0.858038750440   0.289237520975 Bohr   0.0
+[INPUT]  4 C     -1.860722260406  -0.467483138562   0.220499077749 AA   -3.516255466049  -0.883415099734   0.416682867665 Bohr   0.0
+[INPUT]  5 C     -0.539659921076  -0.111261350159  -0.111995807050 AA   -1.019809451238  -0.210253480050  -0.211641402424 Bohr   0.0
+[INPUT]  6 C     -0.306066534515   1.211688102406  -0.548059464905 AA   -0.578381926128   2.289758661941  -1.035682288646 Bohr   0.0
+[INPUT]  7 H     -1.138706995649   3.125003614957  -1.028775230758 AA   -2.151844357903   5.905400970545  -1.944103429869 Bohr   0.0
+[INPUT]  8 H     -3.462065851643   2.478391153476  -0.367275368138 AA   -6.542356284814   4.683480509615  -0.694049858080 Bohr   0.0
+[INPUT]  9 H     -3.912498292777   0.155448280422   0.435085177654 AA   -7.393550236177   0.293754676532   0.822191826624 Bohr   0.0
+[INPUT] 10 H     -2.066097354373  -1.480379863824   0.556759780145 AA   -3.904358146453  -2.797512502948   1.052123501647 Bohr   0.0
+[INPUT] 11 C      0.573109771367  -1.120219177474  -0.001010285931 AA    1.083020507196  -2.116907444911  -0.001909163717 Bohr   0.0
+[INPUT] 12 O      0.938500201695   1.608895973472  -1.013123796359 AA    1.773508349053   3.040372752778  -1.914526505398 Bohr   0.0
+[INPUT] 13 C      1.928169230248   2.111027803466  -0.153397747551 AA    3.643711766982   3.989264389893  -0.289879730997 Bohr   0.0
+[INPUT] 14 O      2.988285579193   2.397752597936  -0.635066843004 AA    5.647041326662   4.531095724563  -1.200102404070 Bohr   0.0
+[INPUT] 15 C      1.534287547109   2.274546953593   1.297111878470 AA    2.899383260367   4.298270799755   2.451186203228 Bohr   0.0
+[INPUT] 16 O      1.689629905792  -0.797396376284   0.374748556939 AA    3.192937773822  -1.506860763897   0.708172138191 Bohr   0.0
+[INPUT] 17 C      0.239438523955  -2.560233258602  -0.391226359463 AA    0.452473233945  -4.838139673761  -0.739310672096 Bohr   0.0
+[INPUT] 18 C      1.461962400066  -3.480209759593  -0.429606404248 AA    2.762708540537  -6.576643301669  -0.811838445388 Bohr   0.0
+[INPUT] 19 H      0.619253977250   2.872618609057   1.388701417916 AA    1.170220418550   5.428462431447   2.624265348656 Bohr   0.0
+[INPUT] 20 H      2.357942819768   2.758800516153   1.826290648304 AA    4.455866146746   5.213377407838   3.451189149149 Bohr   0.0
+[INPUT] 21 H      1.340946017666   1.286333296306   1.727987366725 AA    2.534020721215   2.430817634927   3.265422869819 Bohr   0.0
+[INPUT] 22 H     -0.278680731705  -2.535552263549  -1.361397843074 AA   -0.526630259116  -4.791499352629  -2.572669069983 Bohr   0.0
+[INPUT] 23 H     -0.505878316677  -2.939716938687   0.325436321118 AA   -0.955971470876  -5.555259897863   0.614985517899 Bohr   0.0
+[INPUT] 24 H      2.195826680322  -3.116741700496  -1.158048651255 AA    4.149511042821  -5.889788214949  -2.188394789794 Bohr   0.0
+[INPUT] 25 H      1.161255424463  -4.497738504765  -0.707814762681 AA    2.194454712901  -8.499493953917  -1.337576048391 Bohr   0.0
+[INPUT] 26 H      1.955861883656  -3.510885610664   0.547894661718 AA    3.696043297586  -6.634612258831   1.035370855758 Bohr   0.0
+
+nuclear repulsion = 876.143898255775
+number of shells = 106
+number of NR pGTOs = 448
+number of NR cGTOs = 256
+basis = ccpvdz
+ecp = {}
+CPU time:     98322.37
+Geometry : /work/hdd/bdka/yzhang65/isol24_dataset/geometry/small/14_product.xyz
+Comment  : ISOL24 reaction 14 product  C11H12O3  (converted from Bohr to Angstrom)
+Atoms    : 26   charge: +0   basis: ccpvdz   AOs: 256
+
+
+******** <class 'pyscf.df.df_jk.DFRHF'> ********
+method = DFRHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+diis_damp = 0
+SCF conv_tol = 1e-10
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = False
+chkfile to save SCF result = 14_product.chk
+max_memory 200000 MB (current use 3666 MB)
+Set gradient conv threshold to 1e-05
+Initial guess from minao.
+******** <class 'pyscf.df.df.DF'> ********
+auxbasis = cc-pvdz-jkfit
+max_memory = 200000
+init E= -651.641897934559
+  HOMO = -0.227472738879693  LUMO = -0.0172017189222742
+cycle= 1 E= -647.814340106119  delta_E= 3.83  |g|= 1.19  |ddm|= 5.03
+  HOMO = -0.334117477888346  LUMO = 0.00678806305968869
+cycle= 2 E= -648.01571254812  delta_E= -0.201  |g|= 0.923  |ddm|=  1.8
+  HOMO = -0.353833710610637  LUMO = 0.064563297370884
+cycle= 3 E= -648.176461590288  delta_E= -0.161  |g|= 0.128  |ddm|= 0.845
+  HOMO = -0.346660607577086  LUMO = 0.0765546189340892
+cycle= 4 E= -648.182367533765  delta_E= -0.00591  |g|= 0.0523  |ddm|= 0.208
+  HOMO = -0.348675487266158  LUMO = 0.0766194674164351
+cycle= 5 E= -648.183168727365  delta_E= -0.000801  |g|= 0.0157  |ddm|= 0.0662
+  HOMO = -0.349357362528284  LUMO = 0.0761068358662897
+cycle= 6 E= -648.183309513218  delta_E= -0.000141  |g|= 0.00756  |ddm|= 0.0319
+  HOMO = -0.348737845750175  LUMO = 0.0769721809444162
+cycle= 7 E= -648.183350939282  delta_E= -4.14e-05  |g|= 0.00271  |ddm|= 0.0218
+  HOMO = -0.348765183847491  LUMO = 0.0770340287375633
+cycle= 8 E= -648.183355182205  delta_E= -4.24e-06  |g|= 0.000994  |ddm|= 0.00628
+  HOMO = -0.348753743154026  LUMO = 0.0770417213794382
+cycle= 9 E= -648.183355709961  delta_E= -5.28e-07  |g|= 0.000365  |ddm|= 0.00208
+  HOMO = -0.348735784247593  LUMO = 0.0770441087322253
+cycle= 10 E= -648.183355772629  delta_E= -6.27e-08  |g|= 0.00013  |ddm|= 0.000601
+  HOMO = -0.348735064910685  LUMO = 0.0770434174622157
+cycle= 11 E= -648.183355786593  delta_E= -1.4e-08  |g|= 6.27e-05  |ddm|= 0.000295
+  HOMO = -0.348734182489602  LUMO = 0.0770395898562859
+cycle= 12 E= -648.183355790002  delta_E= -3.41e-09  |g|= 3.21e-05  |ddm|= 0.000124
+  HOMO = -0.348733740922539  LUMO = 0.0770391897416239
+cycle= 13 E= -648.183355791373  delta_E= -1.37e-09  |g|= 1.43e-05  |ddm|= 0.000105
+  HOMO = -0.348733062020164  LUMO = 0.0770398154806591
+cycle= 14 E= -648.183355791636  delta_E= -2.62e-10  |g|= 5.44e-06  |ddm|= 4.74e-05
+  HOMO = -0.348733181520821  LUMO = 0.0770393785702446
+cycle= 15 E= -648.183355791667  delta_E= -3.16e-11  |g|= 1.88e-06  |ddm|= 1.87e-05
+  HOMO = -0.348733155221579  LUMO = 0.0770395169868914
+Extra cycle  E= -648.183355791664  delta_E= 2.96e-12  |g|= 1.09e-06  |ddm|= 3.43e-06
+converged SCF energy = -648.183355791664
+rhf_internal: lowest eigs of H = [0.66355778 0.69847367 0.74479834]
+<class 'pyscf.df.df_jk.DFRHF'> wavefunction is stable in the internal stability analysis
+Stable RHF solution after 1 stability cycle(s), E = -648.183355791664
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 32, nmo = 184
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219
+ 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237
+ 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4280 MB)
+Init t2, MP2 energy = -649.769038747699  E_corr(MP2) -1.58568295603486
+Init E_corr(MODIFIED_CCSD) = -1.58568295603485
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.58376229982658  dE = 0.00192065621  norm(t1,t2) = 0.119748
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.63478251346913  dE = -0.0510202136  norm(t1,t2) = 0.0389895
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.63454039037846  dE = 0.000242123091  norm(t1,t2) = 0.0202175
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.64163967633959  dE = -0.00709928596  norm(t1,t2) = 0.00856342
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.64221103672844  dE = -0.000571360389  norm(t1,t2) = 0.00265482
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.641833350109  dE = 0.000377686619  norm(t1,t2) = 0.00107947
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.64174658546674  dE = 8.67646423e-05  norm(t1,t2) = 0.000364889
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.64176719091448  dE = -2.06054477e-05  norm(t1,t2) = 0.000183977
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.64177923231157  dE = -1.20413971e-05  norm(t1,t2) = 9.61839e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.64177905658135  dE = 1.75730214e-07  norm(t1,t2) = 4.14846e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.6417795381966  dE = -4.81615246e-07  norm(t1,t2) = 2.38088e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.64177962009882  dE = -8.19022223e-08  norm(t1,t2) = 1.34582e-05
+cycle = 13  E_corr(MODIFIED_CCSD) = -1.64177981581268  dE = -1.95713862e-07  norm(t1,t2) = 7.20877e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.825135607477  E_corr = -1.641779815812684
+Init t2, MP2 energy = -649.769038747699  E_corr(MP2) -1.58568295603486
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 34, nmo = 179
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16 196
+ 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214
+ 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232
+ 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250
+ 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4430 MB)
+Init t2, MP2 energy = -649.775774194663  E_corr(MP2) -1.5924184029987
+Init E_corr(MODIFIED_CCSD) = -1.59241840299864
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.59612319594076  dE = -0.00370479294  norm(t1,t2) = 0.11961
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.64808457168594  dE = -0.0519613757  norm(t1,t2) = 0.0391739
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.64840134573016  dE = -0.000316774044  norm(t1,t2) = 0.020493
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.65566389706748  dE = -0.00726255134  norm(t1,t2) = 0.00858159
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.65635910432261  dE = -0.000695207255  norm(t1,t2) = 0.00273139
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.65599362320939  dE = 0.000365481113  norm(t1,t2) = 0.00106497
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.65589542933317  dE = 9.81938762e-05  norm(t1,t2) = 0.000389436
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.65591764389352  dE = -2.22145604e-05  norm(t1,t2) = 0.000161957
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.65592850140851  dE = -1.0857515e-05  norm(t1,t2) = 8.26397e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.65592852818407  dE = -2.67755551e-08  norm(t1,t2) = 2.81476e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.65592920816174  dE = -6.79977673e-07  norm(t1,t2) = 1.32845e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.65592964553373  dE = -4.37371986e-07  norm(t1,t2) = 5.8948e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.8392854371981  E_corr = -1.655929645533729
+Init t2, MP2 energy = -649.775774194663  E_corr(MP2) -1.5924184029987
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 34, nmo = 177
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16 194
+ 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212
+ 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230
+ 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248
+ 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4428 MB)
+Init t2, MP2 energy = -649.726077474565  E_corr(MP2) -1.54272168290049
+Init E_corr(MODIFIED_CCSD) = -1.54272168290045
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.54559463076869  dE = -0.00287294787  norm(t1,t2) = 0.121908
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.59668774897077  dE = -0.0510931182  norm(t1,t2) = 0.0387344
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.59686904849783  dE = -0.000181299527  norm(t1,t2) = 0.0199566
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.60411268738806  dE = -0.00724363889  norm(t1,t2) = 0.00856552
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.60465203652989  dE = -0.000539349142  norm(t1,t2) = 0.00250546
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.60427780593967  dE = 0.00037423059  norm(t1,t2) = 0.00100693
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.60420550801354  dE = 7.22979261e-05  norm(t1,t2) = 0.000320734
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.60422628210689  dE = -2.07740933e-05  norm(t1,t2) = 0.000147389
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.60423606730934  dE = -9.78520245e-06  norm(t1,t2) = 7.09029e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.60423600934759  dE = 5.79617532e-08  norm(t1,t2) = 2.50374e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.60423668730953  dE = -6.77961935e-07  norm(t1,t2) = 1.18351e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.60423694680999  dE = -2.5950046e-07  norm(t1,t2) = 5.26608e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.7875927384744  E_corr = -1.604236946809986
+Init t2, MP2 energy = -649.726077474565  E_corr(MP2) -1.54272168290049
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 34, nmo = 189
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16 206
+ 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224
+ 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242
+ 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4458 MB)
+Init t2, MP2 energy = -649.828203195122  E_corr(MP2) -1.64484740345745
+Init E_corr(MODIFIED_CCSD) = -1.64484740345742
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.65139307353472  dE = -0.00654567008  norm(t1,t2) = 0.120393
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.70450868246062  dE = -0.0531156089  norm(t1,t2) = 0.0396406
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.70489842102302  dE = -0.000389738562  norm(t1,t2) = 0.0208169
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.71229978877247  dE = -0.00740136775  norm(t1,t2) = 0.00867249
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.71301975865056  dE = -0.000719969878  norm(t1,t2) = 0.00277331
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.71264447150354  dE = 0.000375287147  norm(t1,t2) = 0.00107579
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.71254158120772  dE = 0.000102890296  norm(t1,t2) = 0.000398205
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.7125648622052  dE = -2.32809975e-05  norm(t1,t2) = 0.000165106
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.71257627225958  dE = -1.14100544e-05  norm(t1,t2) = 8.5699e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.71257619524269  dE = 7.7016886e-08  norm(t1,t2) = 2.992e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.71257679266207  dE = -5.97419383e-07  norm(t1,t2) = 1.49681e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.71257722594372  dE = -4.33281644e-07  norm(t1,t2) = 7.41645e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.8959330176081  E_corr = -1.712577225943718
+Init t2, MP2 energy = -649.828203195122  E_corr(MP2) -1.64484740345745
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 36, nmo = 212
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14 227 228 229
+ 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247
+ 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4587 MB)
+Init t2, MP2 energy = -650.049192863732  E_corr(MP2) -1.86583707206743
+Init E_corr(MODIFIED_CCSD) = -1.8658370720674
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.86963680899637  dE = -0.00379973693  norm(t1,t2) = 0.125378
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.92919888039537  dE = -0.0595620714  norm(t1,t2) = 0.0415946
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.92913483595785  dE = 6.40444375e-05  norm(t1,t2) = 0.022568
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.93743060577728  dE = -0.00829576982  norm(t1,t2) = 0.00915048
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.93825703551733  dE = -0.00082642974  norm(t1,t2) = 0.00304786
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.93784043776439  dE = 0.000416597753  norm(t1,t2) = 0.00119899
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.93770255586298  dE = 0.000137881901  norm(t1,t2) = 0.000436977
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.93772485936564  dE = -2.23035027e-05  norm(t1,t2) = 0.000194528
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.93774164327993  dE = -1.67839143e-05  norm(t1,t2) = 9.857e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.93774012319924  dE = 1.52008069e-06  norm(t1,t2) = 3.57956e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.93774098775989  dE = -8.64560652e-07  norm(t1,t2) = 1.77683e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.93774149276865  dE = -5.05008757e-07  norm(t1,t2) = 9.01086e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -650.1210972844329  E_corr = -1.937741492768647
+Init t2, MP2 energy = -650.049192863732  E_corr(MP2) -1.86583707206743
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 36, nmo = 206
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14 221 222 223
+ 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241
+ 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4666 MB)
+Init t2, MP2 energy = -650.054355414335  E_corr(MP2) -1.87099962267051
+Init E_corr(MODIFIED_CCSD) = -1.87099962267052
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.86869375836001  dE = 0.00230586431  norm(t1,t2) = 0.126965
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.93014059253978  dE = -0.0614468342  norm(t1,t2) = 0.0427929
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.92946017430917  dE = 0.000680418231  norm(t1,t2) = 0.0237402
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.93779939462595  dE = -0.00833922032  norm(t1,t2) = 0.00944366
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.93868979339052  dE = -0.000890398765  norm(t1,t2) = 0.00316274
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.93829962975666  dE = 0.000390163634  norm(t1,t2) = 0.00121047
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.93813686329071  dE = 0.000162766466  norm(t1,t2) = 0.000452302
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.93815105929595  dE = -1.41960052e-05  norm(t1,t2) = 0.000192272
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.93817044634699  dE = -1.9387051e-05  norm(t1,t2) = 9.7024e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.93816789234949  dE = 2.55399751e-06  norm(t1,t2) = 3.88108e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.93816899734304  dE = -1.10499355e-06  norm(t1,t2) = 1.67101e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.93816982903354  dE = -8.31690496e-07  norm(t1,t2) = 8.459e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -650.1215256206979  E_corr = -1.938169829033536
+Init t2, MP2 energy = -650.054355414335  E_corr(MP2) -1.87099962267051
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 23, nmo = 119
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27 147 148 149 150 151 152 153 154
+ 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172
+ 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190
+ 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208
+ 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226
+ 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244
+ 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4351 MB)
+Init t2, MP2 energy = -649.156725013168  E_corr(MP2) -0.973369221503336
+Init E_corr(MODIFIED_CCSD) = -0.973369221503342
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.985178610733439  dE = -0.0118093892  norm(t1,t2) = 0.0921762
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.0156933553905  dE = -0.0305147447  norm(t1,t2) = 0.032434
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.01835459610784  dE = -0.00266124072  norm(t1,t2) = 0.0151582
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.02318167203458  dE = -0.00482707593  norm(t1,t2) = 0.00701258
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.02334090173754  dE = -0.000159229703  norm(t1,t2) = 0.0017176
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.02308583523702  dE = 0.000255066501  norm(t1,t2) = 0.000693201
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.02307398744951  dE = 1.18477875e-05  norm(t1,t2) = 0.000201626
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.02309323274859  dE = -1.92452991e-05  norm(t1,t2) = 9.24436e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.02309413654945  dE = -9.03800857e-07  norm(t1,t2) = 3.52332e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.02309551872422  dE = -1.38217477e-06  norm(t1,t2) = 1.32903e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.02309543026162  dE = 8.84625964e-08  norm(t1,t2) = 5.45834e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.2064512219259  E_corr = -1.023095430261619
+Init t2, MP2 energy = -649.156725013168  E_corr(MP2) -0.973369221503336
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 16, nmo = 97
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34 132
+ 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150
+ 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168
+ 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186
+ 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204
+ 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222
+ 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240
+ 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4177 MB)
+Init t2, MP2 energy = -648.932406921743  E_corr(MP2) -0.749051130079045
+Init E_corr(MODIFIED_CCSD) = -0.749051130079056
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.755927440180962  dE = -0.0068763101  norm(t1,t2) = 0.0763021
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.777485227915605  dE = -0.0215577877  norm(t1,t2) = 0.0255579
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.779259249926315  dE = -0.00177402201  norm(t1,t2) = 0.0115891
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.782490571691326  dE = -0.00323132177  norm(t1,t2) = 0.00553614
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.782488983657476  dE = 1.58803385e-06  norm(t1,t2) = 0.00137255
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.782305474741684  dE = 0.000183508916  norm(t1,t2) = 0.000456898
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.782310187731675  dE = -4.71298999e-06  norm(t1,t2) = 0.000120655
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.78231730971888  dE = -7.12198721e-06  norm(t1,t2) = 4.83485e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.78231572007245  dE = 1.58964643e-06  norm(t1,t2) = 1.74017e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.782316213397275  dE = -4.93324825e-07  norm(t1,t2) = 8.72261e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -648.9656720050616  E_corr = -0.7823162133972748
+Init t2, MP2 energy = -648.932406921743  E_corr(MP2) -0.749051130079045
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 17, nmo = 100
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33 134 135
+ 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+ 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+ 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+ 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207
+ 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225
+ 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243
+ 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4202 MB)
+Init t2, MP2 energy = -648.913099853227  E_corr(MP2) -0.72974406156231
+Init E_corr(MODIFIED_CCSD) = -0.729744061562324
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.74534873884733  dE = -0.0156046773  norm(t1,t2) = 0.0776022
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.767601719181447  dE = -0.0222529803  norm(t1,t2) = 0.0280732
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.77068787657529  dE = -0.00308615739  norm(t1,t2) = 0.0127962
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.774085758710366  dE = -0.00339788214  norm(t1,t2) = 0.00579084
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.774009040995719  dE = 7.67177146e-05  norm(t1,t2) = 0.00148545
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.773825717904848  dE = 0.000183323091  norm(t1,t2) = 0.000467561
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.773845176536324  dE = -1.94586315e-05  norm(t1,t2) = 0.000175109
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.773853822510136  dE = -8.64597381e-06  norm(t1,t2) = 4.4826e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.773851633687012  dE = 2.18882312e-06  norm(t1,t2) = 2.00444e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.773852027047299  dE = -3.93360287e-07  norm(t1,t2) = 7.06194e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -648.9572078187116  E_corr = -0.7738520270472992
+Init t2, MP2 energy = -648.913099853227  E_corr(MP2) -0.72974406156231
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 23, nmo = 122
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27 150 151 152 153 154 155 156 157
+ 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174 175
+ 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193
+ 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211
+ 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229
+ 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247
+ 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4258 MB)
+Init t2, MP2 energy = -649.207317739872  E_corr(MP2) -1.02396194820732
+Init E_corr(MODIFIED_CCSD) = -1.02396194820731
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.03049696732638  dE = -0.00653501912  norm(t1,t2) = 0.098821
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.06234635816726  dE = -0.0318493908  norm(t1,t2) = 0.031682
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.06351147790313  dE = -0.00116511974  norm(t1,t2) = 0.0157055
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.06852862716104  dE = -0.00501714926  norm(t1,t2) = 0.00737958
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.06871831930014  dE = -0.000189692139  norm(t1,t2) = 0.0018834
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.06843470636727  dE = 0.000283612933  norm(t1,t2) = 0.000787179
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.06841464376785  dE = 2.00625994e-05  norm(t1,t2) = 0.000241264
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.06843393536124  dE = -1.92915934e-05  norm(t1,t2) = 0.000112313
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.06843441941828  dE = -4.84057045e-07  norm(t1,t2) = 5.79364e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.06843568730794  dE = -1.26788966e-06  norm(t1,t2) = 2.20848e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.06843518767807  dE = 4.99629871e-07  norm(t1,t2) = 1.26594e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.06843496416655  dE = 2.23511519e-07  norm(t1,t2) = 6.88862e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.2517907558308  E_corr = -1.068434964166554
+Init t2, MP2 energy = -649.207317739872  E_corr(MP2) -1.02396194820732
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 35, nmo = 195
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15 211 212
+ 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230
+ 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248
+ 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4398 MB)
+Init t2, MP2 energy = -649.898919641551  E_corr(MP2) -1.71556384988638
+Init E_corr(MODIFIED_CCSD) = -1.71556384988635
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.72493369842798  dE = -0.00936984854  norm(t1,t2) = 0.122811
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.7801415154823  dE = -0.0552078171  norm(t1,t2) = 0.0401102
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.78058940805252  dE = -0.00044789257  norm(t1,t2) = 0.0212228
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.78833454386137  dE = -0.00774513581  norm(t1,t2) = 0.00877856
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.78908978758074  dE = -0.000755243719  norm(t1,t2) = 0.00285231
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.78869278624625  dE = 0.000397001334  norm(t1,t2) = 0.00111927
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.78858326770195  dE = 0.000109518544  norm(t1,t2) = 0.000416066
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.78860639843665  dE = -2.31307347e-05  norm(t1,t2) = 0.000177789
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.78861882497097  dE = -1.24265343e-05  norm(t1,t2) = 9.24158e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.78861845753149  dE = 3.67439476e-07  norm(t1,t2) = 3.34177e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.78861905428997  dE = -5.96758484e-07  norm(t1,t2) = 1.63539e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.78861953882718  dE = -4.84537207e-07  norm(t1,t2) = 7.96155e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.9719753304915  E_corr = -1.78861953882718
+Init t2, MP2 energy = -649.898919641551  E_corr(MP2) -1.71556384988638
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 33, nmo = 178
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+ 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213
+ 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231
+ 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249
+ 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4476 MB)
+Init t2, MP2 energy = -649.848983227565  E_corr(MP2) -1.66562743590032
+Init E_corr(MODIFIED_CCSD) = -1.66562743590033
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.6545544327194  dE = 0.0110730032  norm(t1,t2) = 0.122585
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.7099041409715  dE = -0.0553497083  norm(t1,t2) = 0.0410863
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.70901138892165  dE = 0.00089275205  norm(t1,t2) = 0.0225424
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.71651403809523  dE = -0.00750264917  norm(t1,t2) = 0.00916606
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.71727769714687  dE = -0.000763659052  norm(t1,t2) = 0.00294581
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.71692620321514  dE = 0.000351493932  norm(t1,t2) = 0.00114812
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.71678911435304  dE = 0.000137088862  norm(t1,t2) = 0.000436452
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.71680187550395  dE = -1.27611509e-05  norm(t1,t2) = 0.000204817
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.71682035310291  dE = -1.8477599e-05  norm(t1,t2) = 0.00011344
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.71681816939082  dE = 2.18371209e-06  norm(t1,t2) = 5.54259e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.71681896628955  dE = -7.96898726e-07  norm(t1,t2) = 3.1054e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.71681963038279  dE = -6.64093243e-07  norm(t1,t2) = 1.84314e-05
+cycle = 13  E_corr(MODIFIED_CCSD) = -1.71681978493737  dE = -1.54554572e-07  norm(t1,t2) = 1.04625e-05
+cycle = 14  E_corr(MODIFIED_CCSD) = -1.71681982758466  dE = -4.26472944e-08  norm(t1,t2) = 4.75248e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.900175619249  E_corr = -1.71681982758466
+Init t2, MP2 energy = -649.848983227565  E_corr(MP2) -1.66562743590032
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 30, nmo = 156
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191
+ 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209
+ 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227
+ 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245
+ 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4342 MB)
+Init t2, MP2 energy = -649.661121515184  E_corr(MP2) -1.47776572351943
+Init E_corr(MODIFIED_CCSD) = -1.47776572351947
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.46552445878084  dE = 0.0122412647  norm(t1,t2) = 0.113649
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.51245814276148  dE = -0.046933684  norm(t1,t2) = 0.0375576
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.51182571839893  dE = 0.000632424363  norm(t1,t2) = 0.0208055
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.51826078515748  dE = -0.00643506676  norm(t1,t2) = 0.0084774
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.51885621331239  dE = -0.000595428155  norm(t1,t2) = 0.00253032
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.51857369921852  dE = 0.000282514094  norm(t1,t2) = 0.000993558
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.51845957988421  dE = 0.000114119334  norm(t1,t2) = 0.00036873
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.51847044290545  dE = -1.08630212e-05  norm(t1,t2) = 0.000173573
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.51848509301521  dE = -1.46501098e-05  norm(t1,t2) = 9.48929e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.51848344229759  dE = 1.65071762e-06  norm(t1,t2) = 4.52921e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.51848403332007  dE = -5.91022484e-07  norm(t1,t2) = 2.4909e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.51848448326224  dE = -4.4994217e-07  norm(t1,t2) = 1.43221e-05
+cycle = 13  E_corr(MODIFIED_CCSD) = -1.51848455556434  dE = -7.23020992e-08  norm(t1,t2) = 7.93739e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.7018403472287  E_corr = -1.518484555564341
+Init t2, MP2 energy = -649.661121515184  E_corr(MP2) -1.47776572351943
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 27, nmo = 134
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23 158 159 160 161 162 163 164 165 166 167 168 169
+ 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187
+ 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205
+ 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223
+ 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241
+ 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4259 MB)
+Init t2, MP2 energy = -649.420365729274  E_corr(MP2) -1.23700993760999
+Init E_corr(MODIFIED_CCSD) = -1.23700993760999
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.23336490705094  dE = 0.00364503056  norm(t1,t2) = 0.106416
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.27168087700177  dE = -0.03831597  norm(t1,t2) = 0.0344632
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.2716155499358  dE = 6.5327066e-05  norm(t1,t2) = 0.0192459
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.27732381417476  dE = -0.00570826424  norm(t1,t2) = 0.0080078
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.27768008135161  dE = -0.000356267177  norm(t1,t2) = 0.0021106
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.27742864556477  dE = 0.000251435787  norm(t1,t2) = 0.000850574
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.27735368068205  dE = 7.49648827e-05  norm(t1,t2) = 0.000288065
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.27736329654008  dE = -9.61585804e-06  norm(t1,t2) = 0.000138794
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.27737352473201  dE = -1.02281919e-05  norm(t1,t2) = 7.11173e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.27737284078557  dE = 6.83946439e-07  norm(t1,t2) = 2.85795e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.27737317675918  dE = -3.35973605e-07  norm(t1,t2) = 1.46645e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.27737339701116  dE = -2.20251985e-07  norm(t1,t2) = 7.39439e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.4607291886755  E_corr = -1.277373397011163
+Init t2, MP2 energy = -649.420365729274  E_corr(MP2) -1.23700993760999
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 31, nmo = 151
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186
+ 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204
+ 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222
+ 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240
+ 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4298 MB)
+Init t2, MP2 energy = -649.625116987154  E_corr(MP2) -1.44176119548963
+Init E_corr(MODIFIED_CCSD) = -1.44176119548966
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.43037602317023  dE = 0.0113851723  norm(t1,t2) = 0.11497
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.47677179888548  dE = -0.0463957757  norm(t1,t2) = 0.0380348
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.47629127603675  dE = 0.000480522849  norm(t1,t2) = 0.0211194
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.48293606806558  dE = -0.00664479203  norm(t1,t2) = 0.00877879
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.48350229766952  dE = -0.000566229604  norm(t1,t2) = 0.00255061
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.48320689656477  dE = 0.000295401105  norm(t1,t2) = 0.00102374
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.48310013266669  dE = 0.000106763898  norm(t1,t2) = 0.000350803
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.48311135491734  dE = -1.12222506e-05  norm(t1,t2) = 0.000155103
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.48312385403205  dE = -1.24991147e-05  norm(t1,t2) = 7.47726e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.48312236629952  dE = 1.48773252e-06  norm(t1,t2) = 2.88706e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.48312308254848  dE = -7.16248962e-07  norm(t1,t2) = 1.25726e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.48312365579929  dE = -5.73250806e-07  norm(t1,t2) = 5.84683e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.6664794474636  E_corr = -1.48312365579929
+Init t2, MP2 energy = -649.625116987154  E_corr(MP2) -1.44176119548963
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 36, nmo = 185
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14 200 201 202
+ 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220
+ 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238
+ 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4408 MB)
+Init t2, MP2 energy = -649.920006053911  E_corr(MP2) -1.73665026224652
+Init E_corr(MODIFIED_CCSD) = -1.73665026224664
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.74173403679843  dE = -0.00508377455  norm(t1,t2) = 0.125048
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.79767346049795  dE = -0.0559394237  norm(t1,t2) = 0.0409892
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.7979111298491  dE = -0.000237669351  norm(t1,t2) = 0.0222232
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.80607133918086  dE = -0.00816020933  norm(t1,t2) = 0.00918103
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.80682682011118  dE = -0.00075548093  norm(t1,t2) = 0.00292669
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.80641892545349  dE = 0.000407894658  norm(t1,t2) = 0.00116539
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.80630079267859  dE = 0.000118132775  norm(t1,t2) = 0.00042039
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.80632142897776  dE = -2.06362992e-05  norm(t1,t2) = 0.000180051
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.80633436062716  dE = -1.29316494e-05  norm(t1,t2) = 9.21408e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.80633348601586  dE = 8.746113e-07  norm(t1,t2) = 3.23472e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.80633428371181  dE = -7.97695955e-07  norm(t1,t2) = 1.58563e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.80633476782669  dE = -4.8411488e-07  norm(t1,t2) = 7.96955e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.989690559491  E_corr = -1.806334767826693
+Init t2, MP2 energy = -649.920006053911  E_corr(MP2) -1.73665026224652
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 30, nmo = 162
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197
+ 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215
+ 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233
+ 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251
+ 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4406 MB)
+Init t2, MP2 energy = -649.491674655009  E_corr(MP2) -1.30831886334469
+Init E_corr(MODIFIED_CCSD) = -1.30831886334471
+cycle = 1  E_corr(MODIFIED_CCSD) = -1.3269431318399  dE = -0.0186242685  norm(t1,t2) = 0.108264
+cycle = 2  E_corr(MODIFIED_CCSD) = -1.36808955653479  dE = -0.0411464247  norm(t1,t2) = 0.0360434
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.36956033452827  dE = -0.00147077799  norm(t1,t2) = 0.0188601
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.37596577650261  dE = -0.00640544197  norm(t1,t2) = 0.00816339
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.37642127164744  dE = -0.000455495145  norm(t1,t2) = 0.00233869
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.37609502287071  dE = 0.000326248777  norm(t1,t2) = 0.000942308
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.37602071636307  dE = 7.43065076e-05  norm(t1,t2) = 0.000347786
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.3760448426853  dE = -2.41263222e-05  norm(t1,t2) = 0.000144078
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.37605220030981  dE = -7.35762451e-06  norm(t1,t2) = 6.998e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.37605241380799  dE = -2.13498177e-07  norm(t1,t2) = 2.39167e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.37605267836262  dE = -2.64554636e-07  norm(t1,t2) = 1.02761e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -1.37605289678994  dE = -2.18427317e-07  norm(t1,t2) = 4.80326e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.5594086884543  E_corr = -1.376052896789941
+Init t2, MP2 energy = -649.491674655009  E_corr(MP2) -1.30831886334469
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 24, nmo = 129
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26 156 157 158 159 160 161 162 163 164
+ 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182
+ 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200
+ 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218
+ 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236
+ 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254
+ 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4203 MB)
+Init t2, MP2 energy = -649.132374979898  E_corr(MP2) -0.949019188233313
+Init E_corr(MODIFIED_CCSD) = -0.94901918823334
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.969612648445687  dE = -0.0205934602  norm(t1,t2) = 0.0926565
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.999081133948663  dE = -0.0294684855  norm(t1,t2) = 0.031167
+cycle = 3  E_corr(MODIFIED_CCSD) = -1.00072994011808  dE = -0.00164880617  norm(t1,t2) = 0.0168224
+cycle = 4  E_corr(MODIFIED_CCSD) = -1.0058719743037  dE = -0.00514203419  norm(t1,t2) = 0.00737469
+cycle = 5  E_corr(MODIFIED_CCSD) = -1.0060414104733  dE = -0.00016943617  norm(t1,t2) = 0.00183767
+cycle = 6  E_corr(MODIFIED_CCSD) = -1.00580202073431  dE = 0.000239389739  norm(t1,t2) = 0.000729601
+cycle = 7  E_corr(MODIFIED_CCSD) = -1.00575508675107  dE = 4.69339832e-05  norm(t1,t2) = 0.000243092
+cycle = 8  E_corr(MODIFIED_CCSD) = -1.00577254404397  dE = -1.74572929e-05  norm(t1,t2) = 0.000104677
+cycle = 9  E_corr(MODIFIED_CCSD) = -1.00577595997184  dE = -3.41592787e-06  norm(t1,t2) = 4.86683e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -1.0057760949139  dE = -1.34942056e-07  norm(t1,t2) = 1.70535e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -1.00577623564136  dE = -1.40727463e-07  norm(t1,t2) = 7.37463e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.1891320273057  E_corr = -1.005776235641364
+Init t2, MP2 energy = -649.132374979898  E_corr(MP2) -0.949019188233313
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 22, nmo = 103
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28 132 133 134 135 136 137 138
+ 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156
+ 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174
+ 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192
+ 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210
+ 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228
+ 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246
+ 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4127 MB)
+Init t2, MP2 energy = -649.069913886717  E_corr(MP2) -0.886558095052848
+Init E_corr(MODIFIED_CCSD) = -0.886558095052872
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.894172827554113  dE = -0.0076147325  norm(t1,t2) = 0.0917485
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.92080488517237  dE = -0.0266320576  norm(t1,t2) = 0.0285412
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.921423870165419  dE = -0.000618984993  norm(t1,t2) = 0.0156778
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.925684446755764  dE = -0.00426057659  norm(t1,t2) = 0.00642755
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.925766186013089  dE = -8.17392573e-05  norm(t1,t2) = 0.00140203
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.925600300620936  dE = 0.000165885392  norm(t1,t2) = 0.00058627
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.925574847466802  dE = 2.54531541e-05  norm(t1,t2) = 0.000179644
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.925583527976984  dE = -8.68051018e-06  norm(t1,t2) = 8.86411e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.925586779061301  dE = -3.25108432e-06  norm(t1,t2) = 3.9447e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.925586653564707  dE = 1.25496594e-07  norm(t1,t2) = 1.33068e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.925586788935855  dE = -1.35371148e-07  norm(t1,t2) = 6.39406e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.1089425806002  E_corr = -0.925586788935855
+Init t2, MP2 energy = -649.069913886717  E_corr(MP2) -0.886558095052848
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 20, nmo = 99
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30 130 131 132 133 134
+ 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152
+ 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170
+ 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188
+ 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206
+ 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224
+ 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242
+ 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4368 MB)
+Init t2, MP2 energy = -649.032748505008  E_corr(MP2) -0.849392713343564
+Init E_corr(MODIFIED_CCSD) = -0.849392713343559
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.857277859855001  dE = -0.00788514651  norm(t1,t2) = 0.0895693
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.883669575721322  dE = -0.0263917159  norm(t1,t2) = 0.0286389
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.884158523801464  dE = -0.00048894808  norm(t1,t2) = 0.0157211
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.888367669067891  dE = -0.00420914527  norm(t1,t2) = 0.00632174
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.888463190569406  dE = -9.55215015e-05  norm(t1,t2) = 0.00141038
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.888307777456195  dE = 0.000155413113  norm(t1,t2) = 0.000594619
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.88827738768696  dE = 3.03897692e-05  norm(t1,t2) = 0.000178132
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.888283870829965  dE = -6.48314301e-06  norm(t1,t2) = 8.54338e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.888287613749219  dE = -3.74291925e-06  norm(t1,t2) = 3.96429e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.88828735362111  dE = 2.6012811e-07  norm(t1,t2) = 1.27062e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.888287537880484  dE = -1.84259374e-07  norm(t1,t2) = 5.96654e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.0716433295448  E_corr = -0.8882875378804838
+Init t2, MP2 energy = -649.032748505008  E_corr(MP2) -0.849392713343564
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 21, nmo = 112
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29 142 143 144 145 146 147
+ 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165
+ 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183
+ 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201
+ 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219
+ 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237
+ 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4339 MB)
+Init t2, MP2 energy = -649.132352926835  E_corr(MP2) -0.948997135170257
+Init E_corr(MODIFIED_CCSD) = -0.948997135170248
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.952002947917762  dE = -0.00300581275  norm(t1,t2) = 0.0910551
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.979388086910609  dE = -0.027385139  norm(t1,t2) = 0.0284206
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.979902280807737  dE = -0.000514193897  norm(t1,t2) = 0.0155814
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.984129539397654  dE = -0.00422725859  norm(t1,t2) = 0.00637622
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.984237084801459  dE = -0.000107545404  norm(t1,t2) = 0.00141924
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.984066123161991  dE = 0.000170961639  norm(t1,t2) = 0.000601498
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.984036848311168  dE = 2.92748508e-05  norm(t1,t2) = 0.000196225
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.984046732875144  dE = -9.88456398e-06  norm(t1,t2) = 0.00010015
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.984051864790766  dE = -5.13191562e-06  norm(t1,t2) = 5.38328e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.984051141526313  dE = 7.23264454e-07  norm(t1,t2) = 2.23245e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.984051089395911  dE = 5.21304013e-08  norm(t1,t2) = 1.17025e-05
+cycle = 12  E_corr(MODIFIED_CCSD) = -0.984050818250624  dE = 2.71145287e-07  norm(t1,t2) = 5.72259e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.1674066099149  E_corr = -0.9840508182506243
+Init t2, MP2 energy = -649.132352926835  E_corr(MP2) -0.948997135170257
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 18, nmo = 106
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32 139 140 141
+ 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159
+ 160 161 162 163 164 165 166 167 168 169 170 171 172 173 174 175 176 177
+ 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195
+ 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213
+ 214 215 216 217 218 219 220 221 222 223 224 225 226 227 228 229 230 231
+ 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249
+ 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4557 MB)
+Init t2, MP2 energy = -648.966513316396  E_corr(MP2) -0.783157524731395
+Init E_corr(MODIFIED_CCSD) = -0.783157524731412
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.80260409077746  dE = -0.019446566  norm(t1,t2) = 0.0808423
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.825574416193653  dE = -0.0229703254  norm(t1,t2) = 0.0269878
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.827001396280421  dE = -0.00142698009  norm(t1,t2) = 0.0144455
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.830920606830463  dE = -0.00391921055  norm(t1,t2) = 0.0060748
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.830997564150274  dE = -7.69573198e-05  norm(t1,t2) = 0.00153794
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.830812968273763  dE = 0.000184595877  norm(t1,t2) = 0.000609029
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.830786227741182  dE = 2.67405326e-05  norm(t1,t2) = 0.000217673
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.830803029271634  dE = -1.68015305e-05  norm(t1,t2) = 8.87618e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.830804339041439  dE = -1.30976981e-06  norm(t1,t2) = 3.77828e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.830804640114116  dE = -3.01072677e-07  norm(t1,t2) = 1.57893e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.830804659921831  dE = -1.98077155e-08  norm(t1,t2) = 9.38669e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.0141604515861  E_corr = -0.8308046599218311
+Init t2, MP2 energy = -648.966513316396  E_corr(MP2) -0.783157524731395
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 19, nmo = 111
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31 143 144 145 146
+ 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164
+ 165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182
+ 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200
+ 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218
+ 219 220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236
+ 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254
+ 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4400 MB)
+Init t2, MP2 energy = -649.016168720253  E_corr(MP2) -0.83281292858838
+Init E_corr(MODIFIED_CCSD) = -0.832812928588376
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.85234710597452  dE = -0.0195341774  norm(t1,t2) = 0.0818554
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.876620111045434  dE = -0.0242730051  norm(t1,t2) = 0.0268987
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.878060023865969  dE = -0.00143991282  norm(t1,t2) = 0.0145206
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.882146075300136  dE = -0.00408605143  norm(t1,t2) = 0.00610097
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.8822594699156  dE = -0.000113394615  norm(t1,t2) = 0.00159894
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.882061076320441  dE = 0.000198393595  norm(t1,t2) = 0.000631998
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.882025265863559  dE = 3.58104569e-05  norm(t1,t2) = 0.000221662
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.882041883523879  dE = -1.66176603e-05  norm(t1,t2) = 9.34283e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.882043547371405  dE = -1.66384753e-06  norm(t1,t2) = 4.03837e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.882043959314532  dE = -4.11943128e-07  norm(t1,t2) = 1.63067e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.882043948471488  dE = 1.08430441e-08  norm(t1,t2) = 9.45627e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -649.0653997401358  E_corr = -0.8820439484714884
+Init t2, MP2 energy = -649.016168720253  E_corr(MP2) -0.83281292858838
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 15, nmo = 82
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35
+ 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135
+ 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153
+ 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171
+ 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189
+ 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207
+ 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225
+ 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243
+ 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4486 MB)
+Init t2, MP2 energy = -648.743171202648  E_corr(MP2) -0.559815410983178
+Init E_corr(MODIFIED_CCSD) = -0.559815410983173
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.589205978916396  dE = -0.0293905679  norm(t1,t2) = 0.0701174
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.604651412353657  dE = -0.0154454334  norm(t1,t2) = 0.0212855
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.607140404199503  dE = -0.00248899185  norm(t1,t2) = 0.0101115
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.609513485615325  dE = -0.00237308142  norm(t1,t2) = 0.00404449
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.609399728817474  dE = 0.000113756798  norm(t1,t2) = 0.00108978
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.609336934257515  dE = 6.279456e-05  norm(t1,t2) = 0.000490086
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.609347765412671  dE = -1.08311552e-05  norm(t1,t2) = 0.000239619
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.609354636200858  dE = -6.87078819e-06  norm(t1,t2) = 9.84632e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.609353195405703  dE = 1.44079515e-06  norm(t1,t2) = 4.10434e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.609352969348384  dE = 2.26057319e-07  norm(t1,t2) = 1.68964e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.609352594672752  dE = 3.74675632e-07  norm(t1,t2) = 4.60258e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -648.792708386337  E_corr = -0.6093525946727519
+Init t2, MP2 energy = -648.743171202648  E_corr(MP2) -0.559815410983178
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 14, nmo = 83
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35
+  36 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136
+ 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154
+ 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 171 172
+ 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190
+ 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208
+ 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225 226
+ 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244
+ 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4296 MB)
+Init t2, MP2 energy = -648.752358214856  E_corr(MP2) -0.569002423191899
+Init E_corr(MODIFIED_CCSD) = -0.569002423191895
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.593663833123694  dE = -0.0246614099  norm(t1,t2) = 0.0727944
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.609608785962373  dE = -0.0159449528  norm(t1,t2) = 0.0223775
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.611543453802238  dE = -0.00193466784  norm(t1,t2) = 0.0110912
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.614226610701667  dE = -0.0026831569  norm(t1,t2) = 0.00454963
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.614121055889873  dE = 0.000105554812  norm(t1,t2) = 0.00102427
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.614052998298554  dE = 6.80575913e-05  norm(t1,t2) = 0.000385711
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.614057660552437  dE = -4.66225388e-06  norm(t1,t2) = 0.000152129
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.614062870778877  dE = -5.21022644e-06  norm(t1,t2) = 6.90996e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.614062163315104  dE = 7.07463773e-07  norm(t1,t2) = 3.64198e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.61406204546141  dE = 1.17853694e-07  norm(t1,t2) = 1.93034e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.614061869938281  dE = 1.75523129e-07  norm(t1,t2) = 5.87247e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -648.7974176616026  E_corr = -0.6140618699382815
+Init t2, MP2 energy = -648.752358214856  E_corr(MP2) -0.569002423191899
+
+******** <class 'pyscf.lno.lnoccsd.MODIFIED_CCSD'> ********
+CC2 = 0
+CCSD nocc = 14, nmo = 80
+frozen orbitals [  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17
+  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35
+  36 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133
+ 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151
+ 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169
+ 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187
+ 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205
+ 206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223
+ 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241
+ 242 243 244 245 246 247 248 249 250 251 252 253 254 255]
+max_cycle = 50
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 200000 MB (current use 4350 MB)
+Init t2, MP2 energy = -648.728873723037  E_corr(MP2) -0.545517931372666
+Init E_corr(MODIFIED_CCSD) = -0.545517931372653
+cycle = 1  E_corr(MODIFIED_CCSD) = -0.57269597687584  dE = -0.0271780455  norm(t1,t2) = 0.0673379
+cycle = 2  E_corr(MODIFIED_CCSD) = -0.587152179714109  dE = -0.0144562028  norm(t1,t2) = 0.0203863
+cycle = 3  E_corr(MODIFIED_CCSD) = -0.589340735924425  dE = -0.00218855621  norm(t1,t2) = 0.00968064
+cycle = 4  E_corr(MODIFIED_CCSD) = -0.591581136639096  dE = -0.00224040071  norm(t1,t2) = 0.0038455
+cycle = 5  E_corr(MODIFIED_CCSD) = -0.591480663879185  dE = 0.00010047276  norm(t1,t2) = 0.00099246
+cycle = 6  E_corr(MODIFIED_CCSD) = -0.591422481403108  dE = 5.81824761e-05  norm(t1,t2) = 0.000375199
+cycle = 7  E_corr(MODIFIED_CCSD) = -0.591429561194481  dE = -7.07979137e-06  norm(t1,t2) = 0.000179689
+cycle = 8  E_corr(MODIFIED_CCSD) = -0.591434786122549  dE = -5.22492807e-06  norm(t1,t2) = 7.47498e-05
+cycle = 9  E_corr(MODIFIED_CCSD) = -0.591433455500032  dE = 1.33062252e-06  norm(t1,t2) = 3.55985e-05
+cycle = 10  E_corr(MODIFIED_CCSD) = -0.591433407449468  dE = 4.80505643e-08  norm(t1,t2) = 1.49837e-05
+cycle = 11  E_corr(MODIFIED_CCSD) = -0.591433149761225  dE = 2.57688243e-07  norm(t1,t2) = 4.02259e-06
+MODIFIED_CCSD converged
+E(MODIFIED_CCSD) = -648.7747889414255  E_corr = -0.5914331497612253
+Init t2, MP2 energy = -648.728873723037  E_corr(MP2) -0.545517931372666

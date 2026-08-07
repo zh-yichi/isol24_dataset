@@ -1,0 +1,38 @@
+/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/sampling.py:275: RuntimeWarning: invalid value encountered in sqrt
+  plateau_err = np.sqrt(plateau_var)
+/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/sampling.py:267: RuntimeWarning: overflow encountered in exp
+  return a - b * np.exp(-x / tau)
+/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/sampling.py:267: RuntimeWarning: overflow encountered in exp
+  return a - b * np.exp(-x / tau)
+/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/sampling.py:275: RuntimeWarning: invalid value encountered in sqrt
+  plateau_err = np.sqrt(plateau_var)
+/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/sampling.py:275: RuntimeWarning: invalid value encountered in sqrt
+  plateau_err = np.sqrt(plateau_var)
+Traceback (most recent call last):
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/script/run_lno_afqmc_pt2ccsd.py", line 15, in <module>
+    from afqmc.lno_afqmc import prep
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/prep.py", line 18, in <module>
+    from afqmc import cholesky, prep, t2_tools
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/prep.py", line 374
+    print(f"Rank Decomposed T2 (t_iajb -> tau_yia tau_yjb) shape {wave_data["tau"].shape}")
+                                                                             ^^^
+SyntaxError: f-string: unmatched '['
+Traceback (most recent call last):
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/script/run_lno_afqmc_pt2ccsd.py", line 15, in <module>
+    from afqmc.lno_afqmc import prep
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/prep.py", line 18, in <module>
+    from afqmc import cholesky, prep, t2_tools
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/prep.py", line 374
+    print(f"Rank Decomposed T2 (t_iajb -> tau_yia tau_yjb) shape {wave_data["tau"].shape}")
+                                                                             ^^^
+SyntaxError: f-string: unmatched '['
+Traceback (most recent call last):
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/script/run_lno_afqmc_pt2ccsd.py", line 15, in <module>
+    from afqmc.lno_afqmc import prep
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/lno_afqmc/prep.py", line 18, in <module>
+    from afqmc import cholesky, prep, t2_tools
+  File "/u/yzhang65/myprojects/software/afqmc/afqmc/prep.py", line 374
+    print(f"Rank Decomposed T2 (t_iajb -> tau_yia tau_yjb) shape {wave_data["tau"].shape}")
+                                                                             ^^^
+SyntaxError: f-string: unmatched '['
+[2026-08-05T21:52:55.034] error: *** JOB 20860168 ON gpue04 CANCELLED AT 2026-08-05T21:52:55 DUE to SIGNAL Terminated ***

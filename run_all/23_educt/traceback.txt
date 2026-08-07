@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/work/hdd/bdka/yzhang65/isol24_dataset/script/run_rhf_ccsd_afqmc.py", line 294, in run_one
+    mol, comment, form = build_mol(xyz, tag, output=tag + '.out')
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/hdd/bdka/yzhang65/isol24_dataset/script/run_rhf_ccsd_afqmc.py", line 158, in build_mol
+    raise ValueError('%s: %d electrons at charge %+d is open shell; RHF '
+ValueError: 23_educt: 141 electrons at charge +0 is open shell; RHF needs an even count -- set CHARGES['23_educt']
