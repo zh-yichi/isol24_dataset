@@ -43,13 +43,14 @@ from pyscf.data.elements import chemcore
 # ----------------------------------------------------------------------------
 # SETTINGS -- edit these
 # ----------------------------------------------------------------------------
-REF_DIR = "./small"              # output directory of run_isol24_small.py (relative to this script)
+REF_DIR = "../afqmc/small"       # output directory of run_isol24_small.py (relative to this script)
 OUTDIR = "./lno_small"           # OUTDIR/<tag>/thresh_<eta>/ per molecule and threshold
 
 AUXBASIS = None                  # must match the reference run (None -> the matching JK-fit set)
 MAX_MEMORY = 250000              # MB, for pyscf
 VERBOSE = 4
 E_CHECK_TOL = 1e-7               # Ha: rebuilt mean field vs the checkpoint energy
+ORDER = "size"                   # run order: "size" (basis functions, then electrons) or "name"
 
 # fragments
 FRAG_TYPE = "h2heavy"            # one IAO fragment per heavy atom, hydrogens attached
@@ -258,6 +259,9 @@ def main():
     )
     if not tags:
         sys.exit(f"no reference results under {ref_dir}")
+    if ORDER == "size":  # small molecules first, by the reference record
+        refs = {t: load_reference(ref_dir, t)[0] for t in tags}
+        tags.sort(key=lambda t: (refs[t]["nao"], refs[t]["nelectron"], t))
 
     if args.list:
         print(f"{'molecule':<12} {'ref':>3} {'nao':>4} {'E(HF)':>18} {'E(CCSD)':>18} {'E(AFQMC)':>14} {'+/-':>9}  chk")
