@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "/work/hdd/bdka/yzhang65/isol24_dataset/script_ccsd_t/run_rhf_ccsd_t.py", line 294, in run_one
-    try:
-         
-  File "/work/hdd/bdka/yzhang65/isol24_dataset/script_ccsd_t/run_rhf_ccsd_t.py", line 158, in build_mol
-    if nelec % 2:
-        ^^^^^^^^^
-ValueError: 23_educt: 141 electrons at charge +0 is open shell; RHF needs an even count -- set CHARGES['23_educt']
