@@ -1,0 +1,755 @@
+#INFO: **** input file is /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/run_isol24_small.py ****
+#!/usr/bin/env python
+"""DF-HF -> DF-MP2 -> DF-CCSD -> AFQMC/pt2CCSD for the small ISOL24 subset (geometry/small).
+
+For every .xyz file the script
+
+  1. converges a density-fitted RHF and drives it to an internally stable solution
+     (orbital rotation along the instability + the second-order Newton/CIAH solver),
+  2. runs the RHF -> UHF external stability analysis; when the RHF is unstable, a DF-UHF
+     is started from the rotated orbitals and driven to an internally stable solution,
+  3. decides the reference: the UHF is used only when it is a different solution from the
+     RHF (lower by more than E_TOL or with <S^2> above S2_TOL); otherwise the RHF is kept
+     and the whole post-HF chain is restricted (RCCSD, pt2ccsd_bar trial, rhf guide),
+     which is cheaper than the unrestricted one (UCCSD, upt2ccsd_bar, uhf guide),
+  4. runs DF-MP2 and DF-CCSD with the chemical frozen core and stages the AFQMC inputs
+     (cholesky vectors, guide, pt2CCSD amplitudes) on the host,
+  5. runs AFQMC/pt2CCSD on every visible GPU (walkers split over the devices),
+
+and appends one line per molecule to OUTDIR/summary.out, with the details in
+OUTDIR/<tag>/result.json. The molecules run from small to large (ORDER = "size": basis
+functions, then electrons), so the short ones finish first and the pipeline fills early.
+
+CPU/GPU pipeline. Steps 1-4 are the host stage, step 5 the device stage. The host stage
+of the next molecule runs on a background thread as soon as the current molecule's AFQMC
+sampling starts (PREFETCH = 1 keeps one molecule ahead), so the SCF / CCSD time is hidden
+behind the sampling. Two molecules' CC objects are then alive at once; MAX_MEMORY is per
+molecule. PREFETCH = 0 (or --hf-only) runs everything in order on the main thread.
+
+The pyscf log of each molecule (SCF, stability, CCSD iterations) goes to
+OUTDIR/<tag>/<tag>.out so that the two stages do not interleave on stdout; the AFQMC
+output and one-line progress messages go to stdout, as in example_afqmc.py.
+
+Reactions 23 and 24 are cations (charge +1, see CHARGES); every other molecule is neutral.
+
+    python run_isol24_small.py                      # every molecule in GEOM_DIR
+    python run_isol24_small.py 03_educt 03_product  # a selection (with or without .xyz)
+    python run_isol24_small.py --list               # what would run, in run order, with charges and sizes
+    python run_isol24_small.py --skip-done          # resume: skip molecules with a result.json
+    python run_isol24_small.py --hf-only            # HF / MP2 / CCSD only, no GPU needed
+
+Everything else is configured in the SETTINGS block.
+"""
+
+import argparse
+import gc
+import json
+import os
+import sys
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+
+# before any JAX import: the platform allocator returns device memory between molecules,
+# cuBLAS instead of the Triton GEMM emitter for the float32 products of the unrestricted kernels
+os.environ.setdefault("XLA_PYTHON_CLIENT_ALLOCATOR", "platform")
+os.environ["XLA_FLAGS"] = "--xla_gpu_enable_triton_gemm=false " + os.environ.get("XLA_FLAGS", "")
+
+import numpy as np
+from pyscf import cc, gto, mp, scf
+
+# ----------------------------------------------------------------------------
+# SETTINGS -- edit these
+# ----------------------------------------------------------------------------
+GEOM_DIR = "../geometry/small"   # relative paths are resolved against this script
+OUTDIR = "./small"               # one sub-directory per molecule + summary.out
+
+BASIS = "cc-pVDZ"
+AUXBASIS = None                  # DF auxiliary basis; None -> the matching JK-fit set
+UNIT = "Angstrom"
+CHARGES = {"23": 1, "24": 1}     # by reaction number; anything else is neutral
+MAX_MEMORY = 250000              # MB, for pyscf (per molecule; two are alive in the pipeline)
+VERBOSE = 4
+PYSCF_LOG = True                 # pyscf output to OUTDIR/<tag>/<tag>.out (False: stdout)
+ORDER = "size"                   # run order: "size" (basis functions, then electrons) or "name"
+
+# pipeline
+PREFETCH = 1                     # host stages run ahead of the device stage; 0 = serial
+
+# mean field
+CONV_TOL = 1e-10
+MAX_STAB_CYCLE = 10              # stability / restart iterations for RHF and for UHF
+E_TOL = 1e-6                     # Ha: UHF counts as a different solution below E_RHF - E_TOL
+S2_TOL = 1e-3                    # ... or with <S^2> above this
+
+# coupled cluster
+CC_CONV_TOL = 1e-6
+CC_CONV_TOL_NORMT = 1e-5
+CC_MAX_CYCLE = 100
+
+# AFQMC/pt2CCSD
+N_WALKERS = 300                  # must be divisible by the number of GPUs
+N_BLOCKS = 1200
+TAU_EQL = 50
+SEED = 7
+MIXED_PRECISION = True
+MIXED_OUTLIER = "none"           # per-walker handling during the run (clamp / reject / none)
+OUTLIER_ZETA = None              # post-sampling block rejection; None keeps every block
+# ----------------------------------------------------------------------------
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+print = partial(print, flush=True)
+
+
+def _resolve(path):
+    return path if os.path.isabs(path) else os.path.normpath(os.path.join(HERE, path))
+
+
+def read_xyz(path):
+    """(atom list for gto.Mole, comment line) from an .xyz file."""
+    with open(path) as fh:
+        lines = fh.read().splitlines()
+    natm = int(lines[0].split()[0])
+    comment = lines[1].strip() if len(lines) > 1 else ""
+    atoms = []
+    for line in lines[2:]:
+        if line.strip():
+            sym, x, y, z = line.split()[:4]
+            atoms.append((sym, (float(x), float(y), float(z))))
+    if len(atoms) != natm:
+        raise ValueError(f"{path}: header says {natm} atoms, found {len(atoms)}")
+    return atoms, comment
+
+
+def charge_of(tag):
+    """The charge from the reaction number in the file name, e.g. '23_educt' -> 1."""
+    return CHARGES.get(tag.split("_")[0], 0)
+
+
+def size_key(xyz):
+    """(basis functions, electrons, name): the run order of ORDER = "size"."""
+    tag = os.path.splitext(os.path.basename(xyz))[0]
+    mol = gto.M(atom=read_xyz(xyz)[0], basis=BASIS, charge=charge_of(tag), unit=UNIT, verbose=0)
+    return (mol.nao_nr(), mol.nelectron, tag)
+
+
+def build_mol(xyz, output=None):
+    atoms, comment = read_xyz(xyz)
+    tag = os.path.splitext(os.path.basename(xyz))[0]
+    mol = gto.M(atom=atoms, basis=BASIS, charge=charge_of(tag), spin=0, unit=UNIT,
+                symmetry=0, max_memory=MAX_MEMORY, verbose=VERBOSE, output=output)
+    mol.comment = comment
+    return mol
+
+
+# ----------------------------------------------------------------------------- mean field
+def _drive_internal(mf, label):
+    """Repeat SCF + internal stability until the solution is stable; Newton after the
+    first instability. Returns (mf, stable, n_cycles)."""
+    second_order = False
+    stable = False
+    cycle = 0
+    for cycle in range(1, MAX_STAB_CYCLE + 1):
+        mo_i, _, stable_i, _ = mf.stability(internal=True, external=False, return_status=True)
+        if stable_i and mf.converged:
+            stable = True
+            print(f"[{label}] stable after {cycle} stability cycle(s), E = {mf.e_tot:.12f}")
+            break
+        print(f"[{label}] cycle {cycle}: internal instability or unconverged SCF; "
+              "rotating the orbitals and restarting with the second-order solver")
+        mo_occ = mf.mo_occ
+        if not second_order:
+            mf = mf.newton()
+            second_order = True
+        mf.kernel(mo_i, mo_occ)
+    if not stable:
+        print(f"[{label}] WARNING: no stable solution after {MAX_STAB_CYCLE} stability cycles")
+    return mf, stable, cycle
+
+
+def run_stable_rhf(mol, chkfile, tag):
+    mf = scf.RHF(mol).density_fit(auxbasis=AUXBASIS)
+    mf.conv_tol = CONV_TOL
+    mf.chkfile = chkfile
+    mf.kernel()
+    return _drive_internal(mf, f"{tag} RHF")
+
+
+def run_stable_uhf(mol, mo_rhf_to_uhf, mo_occ_rhf, chkfile, tag):
+    """DF-UHF started from the orbitals of the RHF -> UHF instability, then driven to
+    internal stability."""
+    mf = scf.UHF(mol).density_fit(auxbasis=AUXBASIS)
+    mf.conv_tol = CONV_TOL
+    mf.chkfile = chkfile
+    occ = np.asarray(mo_occ_rhf > 0, dtype=float)
+    dm0 = mf.make_rdm1(mo_rhf_to_uhf, (occ, occ))
+    mf.kernel(dm0=dm0)
+    return _drive_internal(mf, f"{tag} UHF")
+
+
+def run_mean_field(mol, workdir, tag):
+    """RHF (internal stability) -> external RHF->UHF check -> UHF (internal stability) if
+    needed. Returns (mf, info): mf is the RHF or the UHF the post-HF chain is built on."""
+    t0 = time.time()
+    mf_r, stable_r, ncyc_r = run_stable_rhf(mol, os.path.join(workdir, "rhf.chk"), tag)
+    info = dict(e_rhf=float(mf_r.e_tot), rhf_converged=bool(mf_r.converged),
+                rhf_stable=bool(stable_r), rhf_stab_cycles=int(ncyc_r))
+
+    _, mo_e, _, stable_e = mf_r.stability(internal=False, external=True, return_status=True)
+    info["rhf_external_stable"] = bool(stable_e)
+    if stable_e:
+        print(f"[{tag} HF] RHF is stable against RHF -> UHF: restricted reference, E = {mf_r.e_tot:.12f}")
+        info.update(reference="RHF", e_uhf=None, s2=0.0, uhf_stable=None, uhf_stab_cycles=0)
+        mf = mf_r
+    else:
+        print(f"[{tag} HF] RHF -> UHF instability found: running UHF from the rotated orbitals")
+        mf_u, stable_u, ncyc_u = run_stable_uhf(mol, mo_e, mf_r.mo_occ, os.path.join(workdir, "uhf.chk"), tag)
+        s2, mult = mf_u.spin_square()
+        de = float(mf_u.e_tot - mf_r.e_tot)
+        info.update(e_uhf=float(mf_u.e_tot), s2=float(s2), uhf_converged=bool(mf_u.converged),
+                    uhf_stable=bool(stable_u), uhf_stab_cycles=int(ncyc_u), e_uhf_minus_rhf=de)
+        print(f"[{tag} HF] E(UHF) - E(RHF) = {de:.3e} Ha, <S^2> = {s2:.3e}")
+        # the UHF is the RHF solution only if both the energy and <S^2> agree with it
+        same_solution = (de >= -E_TOL) and (s2 <= S2_TOL)
+        if same_solution:
+            print(f"[{tag} HF] the UHF collapsed onto the RHF solution: restricted reference")
+            info["reference"] = "RHF"
+            mf = mf_r
+        else:
+            print(f"[{tag} HF] the UHF is a different solution: unrestricted reference")
+            info["reference"] = "UHF"
+            mf = mf_u
+    info["t_hf"] = time.time() - t0
+    return mf, info
+
+
+# ----------------------------------------------------------------------------- post-HF
+def run_mp2_ccsd(mf, tag):
+    t0 = time.time()
+    mmp = mp.MP2(mf).set_frozen()
+    mmp.kernel()
+    mycc = cc.CCSD(mf).set_frozen()
+    mycc.conv_tol = CC_CONV_TOL
+    mycc.conv_tol_normt = CC_CONV_TOL_NORMT
+    mycc.max_cycle = CC_MAX_CYCLE
+    mycc.verbose = 5
+    mycc.kernel()
+    if not mycc.converged:
+        print(f"[{tag} CC] WARNING: CCSD did not converge")
+    print(f"[{tag} CC] E(MP2) = {mmp.e_tot:.10f}  E(CCSD) = {mycc.e_tot:.10f}  "
+          f"({type(mycc).__name__}, {time.time() - t0:.0f} s)")
+    info = dict(frozen=int(mycc.frozen or 0), e_mp2=float(mmp.e_tot), e_corr_mp2=float(mmp.e_corr),
+                e_ccsd=float(mycc.e_tot), e_corr_ccsd=float(mycc.e_corr),
+                ccsd_converged=bool(mycc.converged), t_cc=time.time() - t0)
+    return mycc, info
+
+
+def stage_afqmc(mycc, restricted, workdir, tag):
+    """Build the mixed AFQMC object and stage its inputs: host work only (no device)."""
+    from trot.afqmc import AfqmcMixed
+
+    t0 = time.time()
+    guide, trial = ("rhf", "pt2ccsd_bar") if restricted else ("uhf", "upt2ccsd_bar")
+    af = AfqmcMixed(mycc, guide=guide, trial=trial, n_walkers=N_WALKERS, n_blocks=N_BLOCKS,
+                    tau_eql=TAU_EQL, seed=SEED, mixed_precision=MIXED_PRECISION)
+    af.save_staged(os.path.join(workdir, "pt2_stage.h5"))
+    af.mixed_outlier = MIXED_OUTLIER
+    print(f"[{tag} AFQMC] staged ({guide} guide, {trial} trial, {time.time() - t0:.0f} s)")
+    info = dict(guide=guide, trial=trial, n_walkers=N_WALKERS, n_blocks=N_BLOCKS, tau_eql=TAU_EQL,
+                seed=SEED, mixed_outlier=MIXED_OUTLIER, outlier_zeta=OUTLIER_ZETA, t_stage=time.time() - t0)
+    return af, info
+
+
+# ----------------------------------------------------------------------------- the two stages
+def host_stage(xyz, outdir, hf_only):
+    """HF -> MP2 -> CCSD -> AFQMC staging of one molecule. Returns the work item of the
+    device stage: dict(tag, workdir, mol, af, result)."""
+    tag = os.path.splitext(os.path.basename(xyz))[0]
+    workdir = os.path.join(outdir, tag)
+    os.makedirs(workdir, exist_ok=True)
+    t0 = time.time()
+    mol = build_mol(xyz, output=os.path.join(workdir, tag + ".out") if PYSCF_LOG else None)
+    print(f"[{tag}] {mol.comment}: atoms {mol.natm}, charge {mol.charge}, electrons {mol.nelectron}, "
+          f"basis {BASIS}, AOs {mol.nao_nr()}")
+    result = dict(tag=tag, xyz=xyz, comment=mol.comment, natm=mol.natm, charge=mol.charge,
+                  nelectron=mol.nelectron, basis=BASIS, nao=mol.nao_nr())
+    mf, info = run_mean_field(mol, workdir, tag)
+    result.update(info)
+    mycc, info = run_mp2_ccsd(mf, tag)
+    result.update(info)
+    af = None
+    if not hf_only:
+        af, info = stage_afqmc(mycc, result["reference"] == "RHF", workdir, tag)
+        result.update(info)
+    result["t_host"] = time.time() - t0
+    print(f"[{tag}] host stage done in {result['t_host']:.0f} s")
+    return dict(tag=tag, workdir=workdir, mol=mol, af=af, result=result)
+
+
+def device_stage(item, mesh):
+    """AFQMC sampling of one staged molecule on the GPUs."""
+    tag, af, result = item["tag"], item["af"], item["result"]
+    t0 = time.time()
+    e, err = af.kernel(mesh=mesh, outlier_zeta=OUTLIER_ZETA)
+    print(f"[{tag} AFQMC] AFQMC/pt2CCSD ({result['guide']} guide, {result['trial']}) energy: {e:.6f} +/- {err:.6f}")
+    print(f"[{tag} AFQMC]   guide energy: {af.guide_e_tot:.6f} +/- {af.guide_e_err:.6f}")
+    result.update(e_afqmc=float(e), e_afqmc_err=float(err), e_guide=float(af.guide_e_tot),
+                  e_guide_err=float(af.guide_e_err), t_afqmc=time.time() - t0)
+    return result
+
+
+def finish(item, t_wait):
+    """Write result.json, close the pyscf log, release the molecule."""
+    result = item["result"]
+    result["t_wait_host"] = t_wait
+    result["wall"] = result["t_host"] + result.get("t_afqmc", 0.0)
+    with open(os.path.join(item["workdir"], "result.json"), "w") as fh:
+        json.dump(result, fh, indent=1)
+    if PYSCF_LOG and item["mol"].stdout is not sys.stdout:
+        item["mol"].stdout.close()
+    item["af"] = item["mol"] = None
+    gc.collect()
+    return result
+
+
+# ----------------------------------------------------------------------------- summary
+SUMMARY_HEADER = (f"{'molecule':<12} {'nao':>4} {'q':>2} {'ref':>3} {'E(RHF)':>18} {'E(UHF)':>18} {'<S^2>':>8} "
+                  f"{'E(MP2)':>18} {'E(CCSD)':>18} {'E(AFQMC)':>14} {'+/-':>9} {'E(guide)':>14} {'+/-':>9} "
+                  f"{'t_host[s]':>9} {'t_qmc[s]':>8}")
+
+
+def summary_line(tag, r):
+    f = lambda x, w=18: f"{x:>{w}.8f}" if x is not None else f"{'-':>{w}}"
+    return (f"{tag:<12} {r['nao']:>4} {r['charge']:>2} {r['reference']:>3} {f(r['e_rhf'])} {f(r.get('e_uhf'))} "
+            f"{r.get('s2', 0.0):>8.4f} {f(r.get('e_mp2'))} {f(r.get('e_ccsd'))} "
+            f"{f(r.get('e_afqmc'), 14)} {f(r.get('e_afqmc_err'), 9)} {f(r.get('e_guide'), 14)} {f(r.get('e_guide_err'), 9)} "
+            f"{r['t_host']:>9.0f} {r.get('t_afqmc', 0.0):>8.0f}")
+
+
+# ----------------------------------------------------------------------------- driver
+def run_all(xyzs, outdir, mesh, hf_only, prefetch):
+    """The molecule loop with the host stage running `prefetch` molecules ahead of the
+    device stage on one background thread. Returns (failed tags, summary file)."""
+    summary = os.path.join(outdir, "summary.out")
+    if not os.path.exists(summary):
+        with open(summary, "w") as fh:
+            fh.write(SUMMARY_HEADER + "\n")
+
+    depth = 0 if hf_only else max(0, min(int(prefetch), len(xyzs) - 1))
+    print(f"CPU/GPU pipeline: {'ON' if depth > 0 else 'OFF'} (prefetch depth {depth}), {len(xyzs)} molecule(s)")
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="host-stage") if depth > 0 else None
+    futures = {}
+
+    def schedule(i):
+        if executor is not None and 0 <= i < len(xyzs) and i not in futures:
+            futures[i] = executor.submit(host_stage, xyzs[i], outdir, hf_only)
+
+    def fill(i):
+        """Queue the host stages of molecules i ... i + depth - 1 (depth = 1: the next one)."""
+        for k in range(i, min(i + depth, len(xyzs))):
+            schedule(k)
+
+    failed = []
+    try:
+        schedule(0)
+        for i, xyz in enumerate(xyzs):
+            tag = os.path.basename(xyz)[:-4]
+            print("\n" + "=" * 100 + f"\n{tag}  ({i + 1}/{len(xyzs)})\n" + "=" * 100)
+            # ---------------- host stage (possibly already finished on the thread)
+            t0 = time.time()
+            try:
+                item = futures.pop(i).result() if executor is not None else host_stage(xyz, outdir, hf_only)
+            except Exception:
+                traceback.print_exc()
+                failed.append(tag)
+                fill(i + 1)
+                continue
+            t_wait = time.time() - t0
+            t_host = item["result"]["t_host"]
+            hidden = 100.0 * (1.0 - t_wait / t_host) if t_host > 0 else 0.0
+            print(f"[{tag}] host stage wait {t_wait:.0f} s of {t_host:.0f} s ({hidden:.0f}% hidden)")
+            # the next molecule's host stage starts now, behind this molecule's sampling
+            fill(i + 1)
+            # ---------------- device stage
+            try:
+                if not hf_only:
+                    device_stage(item, mesh)
+            except Exception:
+                traceback.print_exc()
+                failed.append(tag)
+                finish(item, t_wait)
+                continue
+            r = finish(item, t_wait)
+            line = summary_line(tag, r)
+            print("\n" + SUMMARY_HEADER + "\n" + line)
+            with open(summary, "a") as fh:
+                fh.write(line + "\n")
+    finally:
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
+    return failed, summary
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("molecules", nargs="*", help="file names in GEOM_DIR (default: all), with or without .xyz")
+    ap.add_argument("--list", action="store_true", help="print the molecules with charge and size, then exit")
+    ap.add_argument("--skip-done", action="store_true", help="skip molecules that already have a result.json")
+    ap.add_argument("--hf-only", action="store_true", help="HF / MP2 / CCSD only (no jax, no GPU, no pipeline)")
+    ap.add_argument("--prefetch", type=int, default=PREFETCH, help=f"host stages to run ahead (default {PREFETCH}; 0 = serial)")
+    args = ap.parse_args()
+
+    geom_dir = _resolve(GEOM_DIR)
+    outdir = _resolve(OUTDIR)
+    names = args.molecules or sorted(f for f in os.listdir(geom_dir) if f.endswith(".xyz"))
+    xyzs = [os.path.join(geom_dir, n if n.endswith(".xyz") else n + ".xyz") for n in names]
+    for xyz in xyzs:
+        if not os.path.isfile(xyz):
+            sys.exit(f"geometry not found: {xyz}")
+    if ORDER == "size":  # small molecules first
+        xyzs.sort(key=size_key)
+
+    if args.list:
+        print(f"{'molecule':<12} {'atoms':>5} {'charge':>6} {'nelec':>5} {'nao':>5}  comment")
+        for xyz in xyzs:
+            mol = gto.M(atom=read_xyz(xyz)[0], basis=BASIS, charge=charge_of(os.path.basename(xyz)[:-4]),
+                        unit=UNIT, verbose=0)
+            print(f"{os.path.basename(xyz)[:-4]:<12} {mol.natm:>5} {mol.charge:>6} {mol.nelectron:>5} {mol.nao_nr():>5}  {read_xyz(xyz)[1]}")
+        return
+
+    os.makedirs(outdir, exist_ok=True)
+    if args.skip_done:
+        todo = [x for x in xyzs if not os.path.exists(os.path.join(outdir, os.path.basename(x)[:-4], "result.json"))]
+        for x in xyzs:
+            if x not in todo:
+                print(f"{os.path.basename(x)[:-4]}: result.json exists, skipped")
+        xyzs = todo
+
+    mesh = None
+    if not args.hf_only:
+        import jax
+        from trot.afqmc import AfqmcMixed  # noqa: F401  imported on the main thread before the pipeline
+        from trot.sharding import make_data_mesh
+
+        n_gpu = jax.local_device_count()
+        print(f"JAX sees {n_gpu} device(s): {jax.devices()}")
+        assert N_WALKERS % n_gpu == 0, f"N_WALKERS={N_WALKERS} is not divisible by {n_gpu} devices"
+        mesh = make_data_mesh()
+
+    failed, summary = run_all(xyzs, outdir, mesh, args.hf_only, args.prefetch)
+    print(f"\ndone: {len(xyzs) - len(failed)} of {len(xyzs)} molecules; summary in {summary}")
+    if failed:
+        print("failed: " + ", ".join(failed))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Linux', node='nid008521', release='6.4.0-150600.23.135_15.0.45-cray_shasta_c', version='#1 SMP Mon 26 Oct 2026 04:16:04 PDT (b9b3377)', machine='x86_64')  Threads 64
+Python 3.12.14 (main, Sep  2 2026, 23:27:36) [GCC 15.3.0]
+numpy 2.5.3  scipy 1.18.1  h5py 3.16.0
+Date: Tue Nov  3 22:18:35 2026
+PySCF version 2.14.0
+PySCF path  /global/homes/z/zhyichi/software/pyscf
+GIT HEAD (branch master) 34e5aa023afaf42157932b2b0e35e716f7af0b14
+
+[ENV] PYSCF_TMPDIR /tmp/pyscf_tmp/60779826
+[ENV] PYSCF_EXT_PATH /global/homes/z/zhyichi/software/pyscf-forge
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 26
+[INPUT] num. electrons = 102
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry 0 subgroup None
+[INPUT] Mole.unit = Angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 C     -1.356385026208   2.127626210777  -0.654007457008 AA   -2.563196218994   4.020630833815  -1.235894977168 Bohr   0.0
+[INPUT]  2 C     -2.652223747535   1.755630277820  -0.292766769955 AA   -5.011976503909   3.317660401074  -0.553249013588 Bohr   0.0
+[INPUT]  3 C     -2.905484929986   0.454054552819   0.153057904643 AA   -5.490570776725   0.858038750440   0.289237520975 Bohr   0.0
+[INPUT]  4 C     -1.860722260406  -0.467483138562   0.220499077749 AA   -3.516255466049  -0.883415099734   0.416682867665 Bohr   0.0
+[INPUT]  5 C     -0.539659921076  -0.111261350159  -0.111995807050 AA   -1.019809451238  -0.210253480050  -0.211641402424 Bohr   0.0
+[INPUT]  6 C     -0.306066534515   1.211688102406  -0.548059464905 AA   -0.578381926128   2.289758661941  -1.035682288646 Bohr   0.0
+[INPUT]  7 H     -1.138706995649   3.125003614957  -1.028775230758 AA   -2.151844357903   5.905400970545  -1.944103429869 Bohr   0.0
+[INPUT]  8 H     -3.462065851643   2.478391153476  -0.367275368138 AA   -6.542356284814   4.683480509615  -0.694049858080 Bohr   0.0
+[INPUT]  9 H     -3.912498292777   0.155448280422   0.435085177654 AA   -7.393550236177   0.293754676532   0.822191826624 Bohr   0.0
+[INPUT] 10 H     -2.066097354373  -1.480379863824   0.556759780145 AA   -3.904358146453  -2.797512502948   1.052123501647 Bohr   0.0
+[INPUT] 11 C      0.573109771367  -1.120219177474  -0.001010285931 AA    1.083020507196  -2.116907444911  -0.001909163717 Bohr   0.0
+[INPUT] 12 O      0.938500201695   1.608895973472  -1.013123796359 AA    1.773508349053   3.040372752778  -1.914526505398 Bohr   0.0
+[INPUT] 13 C      1.928169230248   2.111027803466  -0.153397747551 AA    3.643711766982   3.989264389893  -0.289879730997 Bohr   0.0
+[INPUT] 14 O      2.988285579193   2.397752597936  -0.635066843004 AA    5.647041326662   4.531095724563  -1.200102404070 Bohr   0.0
+[INPUT] 15 C      1.534287547109   2.274546953593   1.297111878470 AA    2.899383260367   4.298270799755   2.451186203228 Bohr   0.0
+[INPUT] 16 O      1.689629905792  -0.797396376284   0.374748556939 AA    3.192937773822  -1.506860763897   0.708172138191 Bohr   0.0
+[INPUT] 17 C      0.239438523955  -2.560233258602  -0.391226359463 AA    0.452473233945  -4.838139673761  -0.739310672096 Bohr   0.0
+[INPUT] 18 C      1.461962400066  -3.480209759593  -0.429606404248 AA    2.762708540537  -6.576643301669  -0.811838445388 Bohr   0.0
+[INPUT] 19 H      0.619253977250   2.872618609057   1.388701417916 AA    1.170220418550   5.428462431447   2.624265348656 Bohr   0.0
+[INPUT] 20 H      2.357942819768   2.758800516153   1.826290648304 AA    4.455866146746   5.213377407838   3.451189149149 Bohr   0.0
+[INPUT] 21 H      1.340946017666   1.286333296306   1.727987366725 AA    2.534020721215   2.430817634927   3.265422869819 Bohr   0.0
+[INPUT] 22 H     -0.278680731705  -2.535552263549  -1.361397843074 AA   -0.526630259116  -4.791499352629  -2.572669069983 Bohr   0.0
+[INPUT] 23 H     -0.505878316677  -2.939716938687   0.325436321118 AA   -0.955971470876  -5.555259897863   0.614985517899 Bohr   0.0
+[INPUT] 24 H      2.195826680322  -3.116741700496  -1.158048651255 AA    4.149511042821  -5.889788214949  -2.188394789794 Bohr   0.0
+[INPUT] 25 H      1.161255424463  -4.497738504765  -0.707814762681 AA    2.194454712901  -8.499493953917  -1.337576048391 Bohr   0.0
+[INPUT] 26 H      1.955861883656  -3.510885610664   0.547894661718 AA    3.696043297586  -6.634612258831   1.035370855758 Bohr   0.0
+
+nuclear repulsion = 876.143898255775
+number of shells = 106
+number of NR pGTOs = 448
+number of NR cGTOs = 256
+basis = cc-pVDZ
+ecp = {}
+CPU time:    272501.35
+
+
+******** <class 'pyscf.df.df_jk.DFRHF'> ********
+method = DFRHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+diis_damp = 0
+SCF conv_tol = 1e-10
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = False
+chkfile to save SCF result = /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_product/rhf.chk
+max_memory 250000 MB (current use 13637 MB)
+Set gradient conv threshold to 1e-05
+Initial guess from minao.
+******** <class 'pyscf.df.df.DF'> ********
+auxbasis = cc-pvdz-jkfit
+max_memory = 250000
+init E= -651.641897934568
+  HOMO = -0.22747273887963  LUMO = -0.0172017189223106  gap/eV = 5.72177
+cycle= 1 E= -647.814340106122  delta_E= 3.83  |g|= 1.19  |ddm|= 5.03
+  HOMO = -0.334117477888372  LUMO = 0.00678806305973012  gap/eV = 9.27651
+cycle= 2 E= -648.015712548124  delta_E= -0.201  |g|= 0.923  |ddm|=  1.8
+  HOMO = -0.353833710610601  LUMO = 0.0645632973708938  gap/eV = 11.38516
+cycle= 3 E= -648.17646159029  delta_E= -0.161  |g|= 0.128  |ddm|= 0.845
+  HOMO = -0.346660607577041  LUMO = 0.0765546189341118  gap/eV = 11.51627
+cycle= 4 E= -648.182367533766  delta_E= -0.00591  |g|= 0.0523  |ddm|= 0.208
+  HOMO = -0.348675487266131  LUMO = 0.0766194674164526  gap/eV = 11.57287
+cycle= 5 E= -648.183168727368  delta_E= -0.000801  |g|= 0.0157  |ddm|= 0.0662
+  HOMO = -0.349357362528207  LUMO = 0.0761068358663097  gap/eV = 11.57747
+cycle= 6 E= -648.183309513219  delta_E= -0.000141  |g|= 0.00756  |ddm|= 0.0319
+  HOMO = -0.348737845750125  LUMO = 0.0769721809444728  gap/eV = 11.58416
+cycle= 7 E= -648.183350939285  delta_E= -4.14e-05  |g|= 0.00271  |ddm|= 0.0218
+  HOMO = -0.348765183847476  LUMO = 0.0770340287375566  gap/eV = 11.58659
+cycle= 8 E= -648.18335518221  delta_E= -4.24e-06  |g|= 0.000994  |ddm|= 0.00628
+  HOMO = -0.348753743154028  LUMO = 0.0770417213794015  gap/eV = 11.58648
+cycle= 9 E= -648.183355709967  delta_E= -5.28e-07  |g|= 0.000365  |ddm|= 0.00208
+  HOMO = -0.34873578424757  LUMO = 0.0770441087322213  gap/eV = 11.58606
+cycle= 10 E= -648.183355772632  delta_E= -6.27e-08  |g|= 0.00013  |ddm|= 0.000601
+  HOMO = -0.348735064910661  LUMO = 0.0770434174622063  gap/eV = 11.58602
+cycle= 11 E= -648.183355786594  delta_E= -1.4e-08  |g|= 6.27e-05  |ddm|= 0.000295
+  HOMO = -0.348734182489557  LUMO = 0.0770395898563088  gap/eV = 11.58589
+cycle= 12 E= -648.183355790006  delta_E= -3.41e-09  |g|= 3.21e-05  |ddm|= 0.000124
+  HOMO = -0.348733740922557  LUMO = 0.0770391897416109  gap/eV = 11.58587
+cycle= 13 E= -648.183355791376  delta_E= -1.37e-09  |g|= 1.43e-05  |ddm|= 0.000105
+  HOMO = -0.348733062020152  LUMO = 0.0770398154806404  gap/eV = 11.58587
+cycle= 14 E= -648.18335579164  delta_E= -2.63e-10  |g|= 5.44e-06  |ddm|= 4.74e-05
+  HOMO = -0.34873318152078  LUMO = 0.0770393785702757  gap/eV = 11.58586
+cycle= 15 E= -648.183355791669  delta_E= -2.93e-11  |g|= 1.88e-06  |ddm|= 1.87e-05
+  HOMO = -0.348733155221546  LUMO = 0.0770395169869054  gap/eV = 11.58586
+Extra cycle  E= -648.183355791669  delta_E=    0  |g|= 1.09e-06  |ddm|= 3.43e-06
+converged SCF energy = -648.183355791669
+rhf_internal: lowest eigs of H = [0.66355778 0.69847367 0.74479834]
+<class 'pyscf.df.df_jk.DFRHF'> wavefunction is stable in the internal stability analysis
+rhf_real2complex: lowest eigs of H = [0.16363132 0.20179157 0.20646025]
+<class 'pyscf.df.df_jk.DFRHF'> wavefunction is stable in the real -> complex stability analysis
+rhf_external: lowest eigs of H = [-0.02903216  0.03736957  0.06833058]
+<class 'pyscf.df.df_jk.DFRHF'> wavefunction has an RHF/RKS -> UHF/UKS instability
+
+
+******** <class 'pyscf.df.df_jk.DFUHF'> ********
+method = DFUHF
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+diis_damp = 0
+SCF conv_tol = 1e-10
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = False
+chkfile to save SCF result = /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_product/uhf.chk
+max_memory 250000 MB (current use 14037 MB)
+number electrons alpha = 51  beta = 51
+Set gradient conv threshold to 1e-05
+******** <class 'pyscf.df.df.DF'> ********
+auxbasis = cc-pvdz-jkfit
+max_memory = 250000
+init E= -647.976569979745
+  alpha nocc = 51  HOMO = -0.330193504511179  LUMO = 0.0931316956264134
+  beta  nocc = 51  HOMO = -0.364705876330727  LUMO = 0.0931316956264134
+  HOMO = -0.330193504511  LUMO = 0.0931316956264  gap/eV = 11.51927
+cycle= 1 E= -648.144933014473  delta_E= -0.168  |g|= 0.259  |ddm|= 0.675
+  alpha nocc = 51  HOMO = -0.378049889905571  LUMO = 0.090266426123021
+  beta  nocc = 51  HOMO = -0.366131615202951  LUMO = 0.090266426123021
+  HOMO = -0.366131615203  LUMO = 0.090266426123  gap/eV = 12.41922
+cycle= 2 E= -648.174903303423  delta_E= -0.03  |g|= 0.106  |ddm|= 0.308
+  alpha nocc = 51  HOMO = -0.364148257483897  LUMO = 0.0985988840204493
+  beta  nocc = 51  HOMO = -0.367785391815306  LUMO = 0.0985988840204493
+  HOMO = -0.364148257484  LUMO = 0.0985988840204  gap/eV = 12.59199
+cycle= 3 E= -648.183253146047  delta_E= -0.00835  |g|= 0.0458  |ddm|= 0.116
+  alpha nocc = 51  HOMO = -0.365412192620513  LUMO = 0.0991481616469518
+  beta  nocc = 51  HOMO = -0.371618255487453  LUMO = 0.0991481616469518
+  HOMO = -0.365412192621  LUMO = 0.099148161647  gap/eV = 12.64133
+cycle= 4 E= -648.186033887167  delta_E= -0.00278  |g|= 0.0249  |ddm|= 0.0769
+  alpha nocc = 51  HOMO = -0.364653629637635  LUMO = 0.101130825146772
+  beta  nocc = 51  HOMO = -0.373292258676063  LUMO = 0.101130825146772
+  HOMO = -0.364653629638  LUMO = 0.101130825147  gap/eV = 12.67464
+cycle= 5 E= -648.187322361256  delta_E= -0.00129  |g|= 0.00548  |ddm|= 0.0806
+  alpha nocc = 51  HOMO = -0.362446644903426  LUMO = 0.100322794788282
+  beta  nocc = 51  HOMO = -0.372347444754161  LUMO = 0.100322794788282
+  HOMO = -0.362446644903  LUMO = 0.100322794788  gap/eV = 12.59260
+cycle= 6 E= -648.187398121134  delta_E= -7.58e-05  |g|= 0.00371  |ddm|= 0.0154
+  alpha nocc = 51  HOMO = -0.362135719949046  LUMO = 0.099860256590627
+  beta  nocc = 51  HOMO = -0.372291288407839  LUMO = 0.099860256590627
+  HOMO = -0.362135719949  LUMO = 0.0998602565906  gap/eV = 12.57155
+cycle= 7 E= -648.187434963855  delta_E= -3.68e-05  |g|= 0.00291  |ddm|= 0.00837
+  alpha nocc = 51  HOMO = -0.361509113790262  LUMO = 0.0991163511523125
+  beta  nocc = 51  HOMO = -0.371543020410129  LUMO = 0.0991163511523125
+  HOMO = -0.36150911379  LUMO = 0.0991163511523  gap/eV = 12.53426
+cycle= 8 E= -648.187489408834  delta_E= -5.44e-05  |g|= 0.00188  |ddm|= 0.0159
+  alpha nocc = 51  HOMO = -0.360792030114554  LUMO = 0.0984733604389469
+  beta  nocc = 51  HOMO = -0.370698487604607  LUMO = 0.0984733604389469
+  HOMO = -0.360792030115  LUMO = 0.0984733604389  gap/eV = 12.49725
+cycle= 9 E= -648.18751543706  delta_E= -2.6e-05  |g|= 0.00111  |ddm|= 0.0125
+  alpha nocc = 51  HOMO = -0.360181421591682  LUMO = 0.097848276007285
+  beta  nocc = 51  HOMO = -0.370022312640961  LUMO = 0.097848276007285
+  HOMO = -0.360181421592  LUMO = 0.0978482760073  gap/eV = 12.46362
+cycle= 10 E= -648.187526800587  delta_E= -1.14e-05  |g|= 0.000497  |ddm|= 0.0114
+  alpha nocc = 51  HOMO = -0.359986887328133  LUMO = 0.0976023539482727
+  beta  nocc = 51  HOMO = -0.369713180494685  LUMO = 0.0976023539482727
+  HOMO = -0.359986887328  LUMO = 0.0976023539483  gap/eV = 12.45164
+cycle= 11 E= -648.187528323516  delta_E= -1.52e-06  |g|= 0.000212  |ddm|= 0.00453
+  alpha nocc = 51  HOMO = -0.359951827125004  LUMO = 0.0975800196246026
+  beta  nocc = 51  HOMO = -0.369630433377381  LUMO = 0.0975800196246026
+  HOMO = -0.359951827125  LUMO = 0.0975800196246  gap/eV = 12.45008
+cycle= 12 E= -648.187528440712  delta_E= -1.17e-07  |g|= 0.00012  |ddm|= 0.000929
+  alpha nocc = 51  HOMO = -0.359964790873564  LUMO = 0.0975653964913046
+  beta  nocc = 51  HOMO = -0.36962118167766  LUMO = 0.0975653964913046
+  HOMO = -0.359964790874  LUMO = 0.0975653964913  gap/eV = 12.45003
+cycle= 13 E= -648.187528473216  delta_E= -3.25e-08  |g|= 6.75e-05  |ddm|= 0.000321
+  alpha nocc = 51  HOMO = -0.359959957487074  LUMO = 0.0975581150353868
+  beta  nocc = 51  HOMO = -0.369604895500163  LUMO = 0.0975581150353868
+  HOMO = -0.359959957487  LUMO = 0.0975581150354  gap/eV = 12.44970
+cycle= 14 E= -648.187528485682  delta_E= -1.25e-08  |g|= 4.92e-05  |ddm|= 0.000203
+  alpha nocc = 51  HOMO = -0.359960631348733  LUMO = 0.0975538964801044
+  beta  nocc = 51  HOMO = -0.369600024579459  LUMO = 0.0975538964801044
+  HOMO = -0.359960631349  LUMO = 0.0975538964801  gap/eV = 12.44960
+cycle= 15 E= -648.187528491566  delta_E= -5.88e-09  |g|= 3.81e-05  |ddm|= 0.000102
+  alpha nocc = 51  HOMO = -0.359960362680964  LUMO = 0.0975495886665412
+  beta  nocc = 51  HOMO = -0.369595457652868  LUMO = 0.0975495886665412
+  HOMO = -0.359960362681  LUMO = 0.0975495886665  gap/eV = 12.44948
+cycle= 16 E= -648.187528497648  delta_E= -6.08e-09  |g|= 3.39e-05  |ddm|= 0.000122
+  alpha nocc = 51  HOMO = -0.359958628057801  LUMO = 0.0975459127047329
+  beta  nocc = 51  HOMO = -0.3695910989406  LUMO = 0.0975459127047329
+  HOMO = -0.359958628058  LUMO = 0.0975459127047  gap/eV = 12.44933
+cycle= 17 E= -648.187528503891  delta_E= -6.24e-09  |g|= 2.83e-05  |ddm|= 0.000137
+  alpha nocc = 51  HOMO = -0.359956867617551  LUMO = 0.0975417719213953
+  beta  nocc = 51  HOMO = -0.369586176994558  LUMO = 0.0975417719213953
+  HOMO = -0.359956867618  LUMO = 0.0975417719214  gap/eV = 12.44917
+cycle= 18 E= -648.187528511247  delta_E= -7.36e-09  |g|= 2.18e-05  |ddm|= 0.000213
+  alpha nocc = 51  HOMO = -0.359954357731711  LUMO = 0.0975379618505881
+  beta  nocc = 51  HOMO = -0.369583378326476  LUMO = 0.0975379618505881
+  HOMO = -0.359954357732  LUMO = 0.0975379618506  gap/eV = 12.44900
+cycle= 19 E= -648.187528515829  delta_E= -4.58e-09  |g|= 1.47e-05  |ddm|= 0.000206
+  alpha nocc = 51  HOMO = -0.359952212742882  LUMO = 0.0975361341790135
+  beta  nocc = 51  HOMO = -0.369581853716672  LUMO = 0.0975361341790135
+  HOMO = -0.359952212743  LUMO = 0.097536134179  gap/eV = 12.44889
+cycle= 20 E= -648.18752851775  delta_E= -1.92e-09  |g|= 8.77e-06  |ddm|= 0.000154
+  alpha nocc = 51  HOMO = -0.359951414286722  LUMO = 0.0975359917359411
+  beta  nocc = 51  HOMO = -0.369581881948601  LUMO = 0.0975359917359411
+  HOMO = -0.359951414287  LUMO = 0.0975359917359  gap/eV = 12.44887
+cycle= 21 E= -648.187528518194  delta_E= -4.44e-10  |g|= 6.13e-06  |ddm|= 6.86e-05
+  alpha nocc = 51  HOMO = -0.359951822376919  LUMO = 0.0975360535974259
+  beta  nocc = 51  HOMO = -0.369582796502265  LUMO = 0.0975360535974259
+  HOMO = -0.359951822377  LUMO = 0.0975360535974  gap/eV = 12.44888
+cycle= 22 E= -648.18752851835  delta_E= -1.56e-10  |g|= 4.61e-06  |ddm|= 3.01e-05
+  alpha nocc = 51  HOMO = -0.359952119026598  LUMO = 0.0975369056702777
+  beta  nocc = 51  HOMO = -0.369583593720521  LUMO = 0.0975369056702777
+  HOMO = -0.359952119027  LUMO = 0.0975369056703  gap/eV = 12.44891
+cycle= 23 E= -648.18752851846  delta_E= -1.1e-10  |g|= 3.51e-06  |ddm|= 1.86e-05
+  alpha nocc = 51  HOMO = -0.359952929153399  LUMO = 0.097537575826709
+  beta  nocc = 51  HOMO = -0.369584518400848  LUMO = 0.097537575826709
+  HOMO = -0.359952929153  LUMO = 0.0975375758267  gap/eV = 12.44895
+cycle= 24 E= -648.187528518524  delta_E= -6.46e-11  |g|= 2.34e-06  |ddm|= 2.2e-05
+  alpha nocc = 51  HOMO = -0.359953048493393  LUMO = 0.0975377846261094
+  beta  nocc = 51  HOMO = -0.369584723640877  LUMO = 0.0975377846261094
+  HOMO = -0.359953048493  LUMO = 0.0975377846261  gap/eV = 12.44896
+Extra cycle  E= -648.187528518544  delta_E= -1.93e-11  |g|= 2e-06  |ddm|= 4.08e-06
+converged SCF energy = -648.187528518544  <S^2> = 0.54930019  2S+1 = 1.7880718
+uhf_internal: lowest eigs of H = [0.08270621 0.12463518 0.13712167]
+<class 'pyscf.df.df_jk.DFUHF'> wavefunction is stable in the internal stability analysis
+
+******** <class 'pyscf.mp.dfump2.DFUMP2'> ********
+nocc = (np.int64(37), np.int64(37)), nmo = (242, 242)
+frozen orbitals 14
+max_memory 250000 MB (current use 14049 MB)
+E(DFUMP2) = -650.150705774486  E_corr = -1.96317725594196
+E(SCS-DFUMP2) = -650.093151511044  E_corr = -1.90562299250026
+E_corr(same-spin) = -0.519449670727029
+E_corr(oppo-spin) = -1.44372758521493
+
+******** <class 'pyscf.cc.dfuccsd.UCCSD'> ********
+CC2 = 0
+CCSD nocc = (np.int64(37), np.int64(37)), nmo = (242, 242)
+frozen orbitals 14
+max_cycle = 100
+direct = 0
+conv_tol = 1e-06
+conv_tol_normt = 1e-05
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 250000 MB (current use 15430 MB)
+    CPU time for DF-UCCSD integral transformation    580.36 sec, wall time     10.59 sec
+Init t2, MP2 energy = -1.96317725395896
+    CPU time for init mp2      2.39 sec, wall time      1.45 sec
+Init E_corr(UCCSD) = -1.96317725396436
+cycle = 1  E_corr(UCCSD) = -1.98862763726715  dE = -0.0254503833  norm(t1,t2) = 0.21364
+    CPU time for UCCSD iter   5009.65 sec, wall time    110.35 sec
+cycle = 2  E_corr(UCCSD) = -2.05292067420034  dE = -0.0642930369  norm(t1,t2) = 0.0782115
+    CPU time for UCCSD iter   5209.11 sec, wall time    113.67 sec
+cycle = 3  E_corr(UCCSD) = -2.05597723060956  dE = -0.00305655641  norm(t1,t2) = 0.0603741
+    CPU time for UCCSD iter   5130.46 sec, wall time    112.22 sec
+cycle = 4  E_corr(UCCSD) = -2.07727269388767  dE = -0.0212954633  norm(t1,t2) = 0.0409987
+    CPU time for UCCSD iter   5113.03 sec, wall time    111.13 sec
+cycle = 5  E_corr(UCCSD) = -2.07922855180172  dE = -0.00195585791  norm(t1,t2) = 0.0188088
+    CPU time for UCCSD iter   5196.98 sec, wall time    113.13 sec
+cycle = 6  E_corr(UCCSD) = -2.07782166944008  dE = 0.00140688236  norm(t1,t2) = 0.00921905
+    CPU time for UCCSD iter   5193.94 sec, wall time    113.92 sec
+cycle = 7  E_corr(UCCSD) = -2.07797897560536  dE = -0.000157306165  norm(t1,t2) = 0.00304387
+    CPU time for UCCSD iter   5191.06 sec, wall time    112.93 sec
+cycle = 8  E_corr(UCCSD) = -2.07823792788995  dE = -0.000258952285  norm(t1,t2) = 0.00132595
+    CPU time for UCCSD iter   5162.34 sec, wall time    112.06 sec
+cycle = 9  E_corr(UCCSD) = -2.07832927732604  dE = -9.13494361e-05  norm(t1,t2) = 0.000682898
+    CPU time for UCCSD iter   5195.96 sec, wall time    113.65 sec
+cycle = 10  E_corr(UCCSD) = -2.07832273263784  dE = 6.5446882e-06  norm(t1,t2) = 0.00029036
+    CPU time for UCCSD iter   5222.84 sec, wall time    114.07 sec
+cycle = 11  E_corr(UCCSD) = -2.07831764481182  dE = 5.08782602e-06  norm(t1,t2) = 0.000167762
+    CPU time for UCCSD iter   5136.83 sec, wall time    111.84 sec
+cycle = 12  E_corr(UCCSD) = -2.07831312604992  dE = 4.51876189e-06  norm(t1,t2) = 0.000101979
+    CPU time for UCCSD iter   5184.75 sec, wall time    112.44 sec
+cycle = 13  E_corr(UCCSD) = -2.07831429528386  dE = -1.16923394e-06  norm(t1,t2) = 6.23978e-05
+    CPU time for UCCSD iter   5207.77 sec, wall time    113.78 sec
+cycle = 14  E_corr(UCCSD) = -2.07831709540505  dE = -2.80012119e-06  norm(t1,t2) = 3.98648e-05
+    CPU time for UCCSD iter   5255.95 sec, wall time    114.60 sec
+cycle = 15  E_corr(UCCSD) = -2.07831871755378  dE = -1.62214873e-06  norm(t1,t2) = 2.30848e-05
+    CPU time for UCCSD iter   5168.40 sec, wall time    112.01 sec
+cycle = 16  E_corr(UCCSD) = -2.07831988948417  dE = -1.17193039e-06  norm(t1,t2) = 1.32764e-05
+    CPU time for UCCSD iter   5225.61 sec, wall time    113.66 sec
+cycle = 17  E_corr(UCCSD) = -2.07832058319266  dE = -6.93708495e-07  norm(t1,t2) = 8.00648e-06
+    CPU time for UCCSD iter   5195.96 sec, wall time    113.63 sec
+    CPU time for UCCSD  88000.63 sec, wall time   1919.09 sec
+UCCSD converged
+E(UCCSD) = -650.2658491017364  E_corr = -2.078320583192664

@@ -1,0 +1,8 @@
+WARNING: overwriting environment variables set in the machine
+overwriting variable ['LD_LIBRARY_PATH']
+/global/homes/z/zhyichi/software/trot/trot/afqmc.py:5: UserWarning: JAX was imported before AFQMC configuration; GPU memory settings (XLA_PYTHON_CLIENT_PREALLOCATE, XLA_PYTHON_CLIENT_ALLOCATOR) may not take effect. For full control, call config.configure_once(...) before importing jax.
+  configure_once()
+/pscratch/sd/z/zhyichi/work/isol24_dataset/lno_afqmc/run_lno_small.py:149: UserWarning: XLA_PYTHON_CLIENT_ALLOCATOR is None, not 'platform': jax keeps a memory pool, so device memory may not return to the driver between fragments. Import trot.lnoafqmc before jax, or set the variable, for long fragment loops.
+  lno = LnoAfqmcMixed(
+/pscratch/sd/z/zhyichi/work/isol24_dataset/lno_afqmc/run_lno_small.py:149: UserWarning: XLA_PYTHON_CLIENT_ALLOCATOR is None, not 'platform': jax keeps a memory pool, so device memory may not return to the driver between fragments. Import trot.lnoafqmc before jax, or set the variable, for long fragment loops.
+  lno = LnoAfqmcMixed(

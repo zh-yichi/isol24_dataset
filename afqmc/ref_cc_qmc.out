@@ -1,0 +1,3949 @@
+JAX sees 4 device(s): [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2), CudaDevice(id=3)]
+CPU/GPU pipeline: ON (prefetch depth 1), 22 molecule(s)
+
+====================================================================================================
+03_educt  (1/22)
+====================================================================================================
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_educt/03_educt.out
+[03_educt] ISOL24 reaction 3 educt  C6H12O6  (converted from Bohr to Angstrom): atoms 24, charge 0, electrons 96, basis cc-pVDZ, AOs 228
+[03_educt RHF] stable after 1 stability cycle(s), E = -683.395790050876
+[03_educt HF] RHF is stable against RHF -> UHF: restricted reference, E = -683.395790050876
+[03_educt CC] E(MP2) = -685.3377672232  E(CCSD) = -685.4183764748  (RCCSD, 164 s)
+[stage] cholesky from density fitting (n_aux=1116), max_error=1e-05 ...
+[stage] density fitting: nchol=996 in 9.89s
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_educt/pt2_stage.h5...
+[stage] staged inputs written in 0.39s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_educt/pt2_stage.h5
+[03_educt AFQMC] staged (rhf guide, pt2ccsd_bar trial, 11 s)
+[03_educt] host stage done in 202 s
+[03_educt] host stage wait 202 s of 202 s (-0% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_product/03_product.out
+[03_product] ISOL24 reaction 3 product  C6H12O6  (converted from Bohr to Angstrom): atoms 24, charge 0, electrons 96, basis cc-pVDZ, AOs 228
+******** Runtime ********
+ run_started     = 2026-11-03 20:22:34 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.63s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.16s
+[03_product RHF] stable after 1 stability cycle(s), E = -683.380319684959
+
+******** AFQMC ********
+ nfrozen         = 12
+ nelec           = (36, 36)
+ norb            = 216
+ nchol           = 996
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 996
+[03_product HF] RHF is stable against RHF -> UHF: restricted reference, E = -683.380319684959
+  nchol_chunk_used            = 996
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 996  (1 steps over 996 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 1397.3 MB
+  memory_per_walker = 93.18 MB  (19.46 MB + 996 x 75.8 KB)
+  memory_walkers    = 6988.5 MB  (75 walkers in flight)
+  memory_used       = 21264.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 996 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -683.3957558277  3.000000e+02  -685.4182829256  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -685.4457233500  3.051383e+02               -             -           0      14.2
+[eql   80/200]   20.00  -685.4985981234  2.970686e+02               -             -           0      27.0
+[eql  120/200]   30.00  -685.5030948501  2.972115e+02               -             -           0      33.9
+[eql  160/200]   40.00  -685.4762105480  2.970545e+02               -             -           0      41.2
+[eql  200/200]   50.00  -685.5081038598  2.968785e+02               -             -           2      48.3
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -685.4976786380   7.242e-03  2.971824e+02  -685.4824438507   1.849e-03           2      1.242     149.0
+[03_product CC] E(MP2) = -685.3301819471  E(CCSD) = -685.4096008124  (RCCSD, 194 s)
+[stage] cholesky from density fitting (n_aux=1116), max_error=1e-05 ...
+[stage] density fitting: nchol=994 in 10.47s
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_product/pt2_stage.h5...
+[stage] staged inputs written in 0.39s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/03_product/pt2_stage.h5
+[03_product AFQMC] staged (rhf guide, pt2ccsd_bar trial, 12 s)
+[03_product] host stage done in 225 s
+[blk  240/1200]  -685.4962929855   5.361e-03  2.971653e+02  -685.4842025305   1.789e-03           6      0.740     237.9
+[blk  360/1200]  -685.4962606838   4.424e-03  2.971444e+02  -685.4845532749   1.319e-03           6      0.729     325.3
+[blk  480/1200]  -685.4945892552   3.653e-03  2.971401e+02  -685.4835466910   1.098e-03           7      0.731     413.0
+[blk  600/1200]  -685.4938303424   3.011e-03  2.971328e+02  -685.4832151038   9.315e-04           7      0.731     500.7
+[blk  720/1200]  -685.4941031086   2.663e-03  2.971237e+02  -685.4833751822   8.895e-04           8      0.733     588.6
+[blk  840/1200]  -685.4928514022   2.397e-03  2.971222e+02  -685.4832512774   7.868e-04           8      0.728     676.0
+[blk  960/1200]  -685.4939498048   2.165e-03  2.971234e+02  -685.4832924742   7.388e-04           9      0.736     764.3
+[blk 1080/1200]  -685.4943306369   2.254e-03  2.971212e+02  -685.4834507461   5.932e-04           9      0.730     852.0
+[blk 1200/1200]  -685.4930120854   2.080e-03  2.971411e+02  -685.4831491957   5.836e-04           9      0.735     940.1
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -685.493012085390
+  Gamma SE                 = 2.104807e-03
+  Gamma reliable          = yes
+  Gamma window W          = 8
+  tau_int                 = 1.3768940354016617
+  effective samples       = 435.76338089442777
+  Blocking SE [primary]    = 2.080195e-03
+  Blocking B              = 14
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -685.483149195718
+  Gamma SE                 = 6.103039e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 0.891750373206786
+  effective samples       = 672.8340329618986
+  Blocking SE [primary]    = 5.835698e-04
+  Blocking B              = 5
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/pt2ccsd_bar energy = -685.483149 +/- 0.000584 (1-sigma, blocking)
+[03_educt AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -685.483149 +/- 0.000584
+[03_educt AFQMC]   guide energy: -685.493012 +/- 0.002080
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+03_educt      228  0 RHF      -683.39579005                  -   0.0000      -685.33776722      -685.41837647  -685.48314920 0.00058357  -685.49301209 0.00208019       202      985
+
+====================================================================================================
+03_product  (2/22)
+====================================================================================================
+[03_product] host stage wait 0 s of 225 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_educt/13_educt.out
+[13_educt] ISOL24 reaction 13 educt  C12H12N2  (converted from Bohr to Angstrom): atoms 26, charge 0, electrons 98, basis cc-pVDZ, AOs 256
+******** Runtime ********
+ run_started     = 2026-11-03 20:38:58 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.00s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.01s
+[13_educt RHF] stable after 1 stability cycle(s), E = -570.356933588603
+
+******** AFQMC ********
+ nfrozen         = 12
+ nelec           = (36, 36)
+ norb            = 216
+ nchol           = 994
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 994
+  nchol_chunk_used            = 994
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 994  (1 steps over 994 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 1395.3 MB
+  memory_per_walker = 93.03 MB  (19.46 MB + 994 x 75.8 KB)
+  memory_walkers    = 6977.4 MB  (75 walkers in flight)
+  memory_used       = 21223.6 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 994 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[13_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -683.3803446922  3.000000e+02  -685.4095579728  3.000000e+02           0       0.0
+[13_educt UHF] stable after 1 stability cycle(s), E = -570.366192530413
+[13_educt HF] E(UHF) - E(RHF) = -9.259e-03 Ha, <S^2> = 1.077e+00
+[13_educt HF] the UHF is a different solution: unrestricted reference
+[eql   40/200]   10.00  -685.4338329848  3.050873e+02               -             -           0      17.1
+[eql   80/200]   20.00  -685.4823348142  2.971404e+02               -             -           0      28.3
+[eql  120/200]   30.00  -685.4695964475  2.967240e+02               -             -           0      35.7
+[eql  160/200]   40.00  -685.4705626187  2.972267e+02               -             -           0      43.4
+[eql  200/200]   50.00  -685.4987512901  2.971568e+02               -             -           1      51.7
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -685.4800664947   6.279e-03  2.969214e+02  -685.4755423134   2.274e-03           7      1.233     147.9
+[blk  240/1200]  -685.4873351679   4.546e-03  2.969245e+02  -685.4761195194   1.491e-03          10      0.758     238.9
+[blk  360/1200]  -685.4892236831   4.794e-03  2.969240e+02  -685.4759485222   1.760e-03          10      0.761     330.3
+[blk  480/1200]  -685.4890094446   3.896e-03  2.969417e+02  -685.4758365920   1.368e-03          12      0.757     421.1
+[blk  600/1200]  -685.4869848023   3.681e-03  2.969379e+02  -685.4757427606   1.160e-03          15      0.757     511.9
+[blk  720/1200]  -685.4874405106   3.349e-03  2.969483e+02  -685.4759216406   1.125e-03          16      0.759     603.0
+[blk  840/1200]  -685.4855754203   2.853e-03  2.969463e+02  -685.4753635075   9.950e-04          16      0.760     694.1
+[blk  960/1200]  -685.4861560779   2.584e-03  2.969598e+02  -685.4755929825   9.361e-04          16      0.761     785.4
+[blk 1080/1200]  -685.4861645283   2.528e-03  2.969627e+02  -685.4757735906   8.544e-04          17      0.757     876.2
+[blk 1200/1200]  -685.4858875072   2.137e-03  2.969500e+02  -685.4754836553   7.859e-04          17      0.756     966.9
+
+Rejected 1 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -685.485388284651
+  Gamma SE                 = 2.276513e-03
+  Gamma reliable          = yes
+  Gamma window W          = 8
+  tau_int                 = 1.3174048826261506
+  effective samples       = 455.06131630918236
+  Blocking SE [primary]    = 1.958863e-03
+  Blocking B              = 4
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -685.475483655311
+  Gamma SE                 = 7.430730e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.7746693316727554
+  effective samples       = 774.5240136258018
+  Blocking SE [primary]    = 7.859010e-04
+  Blocking B              = 5
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/pt2ccsd_bar energy = -685.475484 +/- 0.000786 (1-sigma, blocking)
+[03_product AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -685.475484 +/- 0.000786
+[03_product AFQMC]   guide energy: -685.485388 +/- 0.001959
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+03_product    228  0 RHF      -683.38031968                  -   0.0000      -685.33018195      -685.40960081  -685.47548366 0.00078590  -685.48538828 0.00195886       225      992
+
+====================================================================================================
+13_educt  (3/22)
+====================================================================================================
+[13_educt CC] E(MP2) = -572.1869815239  E(CCSD) = -572.3242234122  (UCCSD, 1615 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1256), max_error=1e-05 ...
+[stage] density fitting: nchol=1094 in 16.05s
+[stage] projected chol into the alpha/beta bases (256, 256 orbitals) in 0.87s
+[stage] uchol ham ready: norb=(242, 242) nchol=1094 nelec=(35, 35) frozen=(14, 14) h0=-83.3676675605
+[stage] Hamiltonian ready in 17.20s | norb=(242, 242) nchol=1094
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.04s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_educt/pt2_stage.h5
+[13_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 20 s)
+[13_educt] host stage done in 1673 s
+[13_educt] host stage wait 681 s of 1673 s (59% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_product/13_product.out
+[13_product] ISOL24 reaction 13 product  C12H12N2  (converted from Bohr to Angstrom): atoms 26, charge 0, electrons 98, basis cc-pVDZ, AOs 256
+******** Runtime ********
+ run_started     = 2026-11-03 21:06:52 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.01s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.01s | norb=(242, 242)
+[13_product RHF] stable after 1 stability cycle(s), E = -570.313448894941
+
+******** AFQMC ********
+ nfrozen         = (14, 14)
+ nelec           = (35, 35)
+ norb            = (242, 242)
+ nchol           = 1094
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1094
+  nchol_chunk_used            = 1094
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1094  (1 steps over 1094 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 4086.4 MB
+  memory_per_walker = 296.80 MB  (31.15 MB + 1094 x 248.6 KB)
+  memory_walkers    = 22259.9 MB  (75 walkers in flight)
+  memory_used       = 36503.0 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1094 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[13_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[13_product UHF] stable after 1 stability cycle(s), E = -570.318312021943
+[13_product HF] E(UHF) - E(RHF) = -4.863e-03 Ha, <S^2> = 8.288e-01
+[13_product HF] the UHF is a different solution: unrestricted reference
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -570.3661417243  3.000000e+02  -572.3241195424  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -572.3314259591  3.048048e+02               -             -           0      23.0
+[eql   80/200]   20.00  -572.4236575072  2.969597e+02               -             -           5      47.6
+[eql  120/200]   30.00  -572.4062210278  2.966973e+02               -             -           5      64.7
+[eql  160/200]   40.00  -572.4376665776  2.970575e+02               -             -           8      81.7
+[eql  200/200]   50.00  -572.4151755964  2.970333e+02               -             -           8      98.6
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -572.4336820754   5.433e-03  2.969158e+02  -572.4241955666   1.493e-03          10      2.600     312.0
+[blk  240/1200]  -572.4314115244   4.049e-03  2.969208e+02  -572.4232707355   1.195e-03          12      1.680     513.6
+[blk  360/1200]  -572.4336253934   2.964e-03  2.968757e+02  -572.4245745578   1.160e-03          15      1.686     715.9
+[blk  480/1200]  -572.4342962970   2.678e-03  2.968533e+02  -572.4249983447   1.028e-03          17      1.677     917.1
+[blk  600/1200]  -572.4334230730   3.040e-03  2.968496e+02  -572.4246953108   8.743e-04          22      1.684    1119.1
+[blk  720/1200]  -572.4319126109   2.737e-03  2.968442e+02  -572.4242823200   8.276e-04          33      1.678    1320.5
+[blk  840/1200]  -572.4324836657   2.324e-03  2.968347e+02  -572.4244331106   7.702e-04          34      1.681    1522.2
+[13_product CC] E(MP2) = -572.1502781855  E(CCSD) = -572.2806318508  (UCCSD, 1566 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1256), max_error=1e-05 ...
+[stage] density fitting: nchol=1094 in 16.23s
+[stage] projected chol into the alpha/beta bases (256, 256 orbitals) in 0.90s
+[stage] uchol ham ready: norb=(242, 242) nchol=1094 nelec=(35, 35) frozen=(14, 14) h0=-80.4349513944
+[stage] Hamiltonian ready in 17.41s | norb=(242, 242) nchol=1094
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.07s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/13_product/pt2_stage.h5
+[13_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 20 s)
+[13_product] host stage done in 1628 s
+[blk  960/1200]  -572.4332559632   2.069e-03  2.968310e+02  -572.4244523561   6.516e-04          37      1.643    1719.4
+[blk 1080/1200]  -572.4344408201   2.045e-03  2.968288e+02  -572.4244465811   7.848e-04          39      1.633    1915.4
+[blk 1200/1200]  -572.4344939730   1.913e-03  2.968345e+02  -572.4240599780   6.718e-04          40      1.634    2111.5
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -572.434493972951
+  Gamma SE                 = 1.913309e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.6061938009176902
+  effective samples       = 373.55392584456075
+  Blocking SE [primary]    = 1.913336e-03
+  Blocking B              = 14
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -572.424059978003
+  Gamma SE                 = 6.381666e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.1887900556775166
+  effective samples       = 504.7148545148683
+  Blocking SE [primary]    = 6.717755e-04
+  Blocking B              = 11
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -572.424060 +/- 0.000672 (1-sigma, blocking)
+[13_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -572.424060 +/- 0.000672
+[13_educt AFQMC]   guide energy: -572.434494 +/- 0.001913
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+13_educt      256  0 UHF      -570.35693359      -570.36619253   1.0771      -572.18698152      -572.32422341  -572.42405998 0.00067178  -572.43449397 0.00191334      1673     2158
+
+====================================================================================================
+13_product  (4/22)
+====================================================================================================
+[13_product] host stage wait 0 s of 1628 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_educt/14_educt.out
+[14_educt] ISOL24 reaction 14 educt  C11H12O3  (converted from Bohr to Angstrom): atoms 26, charge 0, electrons 102, basis cc-pVDZ, AOs 256
+******** Runtime ********
+ run_started     = 2026-11-03 21:42:49 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.02s | norb=(242, 242)
+[14_educt RHF] stable after 1 stability cycle(s), E = -648.183894677427
+
+******** AFQMC ********
+ nfrozen         = (14, 14)
+ nelec           = (35, 35)
+ norb            = (242, 242)
+ nchol           = 1094
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1094
+  nchol_chunk_used            = 1094
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1094  (1 steps over 1094 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 4086.4 MB
+  memory_per_walker = 296.80 MB  (31.15 MB + 1094 x 248.6 KB)
+  memory_walkers    = 22259.9 MB  (75 walkers in flight)
+  memory_used       = 36503.0 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1094 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[14_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -570.3182661158  3.000000e+02  -572.2805302237  3.000000e+02           0       0.0
+[14_educt UHF] stable after 1 stability cycle(s), E = -648.185378772653
+[14_educt HF] E(UHF) - E(RHF) = -1.484e-03 Ha, <S^2> = 3.968e-01
+[14_educt HF] the UHF is a different solution: unrestricted reference
+[eql   40/200]   10.00  -572.2851486218  3.046654e+02               -             -           0      24.7
+[eql   80/200]   20.00  -572.3920740432  2.970048e+02               -             -           1      45.9
+[eql  120/200]   30.00  -572.3917829514  2.967278e+02               -             -           2      63.5
+[eql  160/200]   40.00  -572.3980552152  2.967879e+02               -             -           2      79.7
+[eql  200/200]   50.00  -572.3804592238  2.971100e+02               -             -           2      96.2
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -572.3864964234   5.664e-03  2.968688e+02  -572.3797337904   2.155e-03           5      2.548     305.8
+[blk  240/1200]  -572.3856626835   4.070e-03  2.968455e+02  -572.3783448280   1.898e-03           9      1.682     507.7
+[blk  360/1200]  -572.3810089266   3.419e-03  2.968267e+02  -572.3776610595   1.370e-03          10      1.675     708.7
+[blk  480/1200]  -572.3832724676   3.036e-03  2.968378e+02  -572.3783595132   1.229e-03          12      1.684     910.7
+[blk  600/1200]  -572.3835732007   2.442e-03  2.968105e+02  -572.3782602245   1.038e-03          12      1.678    1112.0
+[blk  720/1200]  -572.3856265609   3.222e-03  2.968087e+02  -572.3798382279   1.655e-03          18      1.684    1314.1
+[blk  840/1200]  -572.3852822708   2.237e-03  2.968022e+02  -572.3794314626   1.238e-03          21      1.681    1515.8
+[blk  960/1200]  -572.3860690875   2.437e-03  2.967946e+02  -572.3790965209   1.266e-03          24      1.679    1717.3
+[blk 1080/1200]  -572.3862096843   2.581e-03  2.967911e+02  -572.3789982370   1.017e-03          25      1.679    1918.8
+[14_educt CC] E(MP2) = -650.1706533801  E(CCSD) = -650.2726322539  (UCCSD, 2047 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1256), max_error=1e-05 ...
+[stage] density fitting: nchol=1100 in 16.18s
+[stage] projected chol into the alpha/beta bases (256, 256 orbitals) in 0.90s
+[stage] uchol ham ready: norb=(242, 242) nchol=1100 nelec=(37, 37) frozen=(14, 14) h0=-73.5147729986
+[stage] Hamiltonian ready in 17.37s | norb=(242, 242) nchol=1100
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.10s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_educt/pt2_stage.h5
+[14_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 20 s)
+[14_educt] host stage done in 2112 s
+[blk 1200/1200]  -572.3863858976   1.987e-03  2.967914e+02  -572.3790628762   9.389e-04          26      1.667    2118.8
+
+Rejected 1 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -572.386025991268
+  Gamma SE                 = 2.000844e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.5591640114021912
+  effective samples       = 384.50092204274017
+  Blocking SE [primary]    = 1.911995e-03
+  Blocking B              = 14
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -572.379062876177
+  Gamma SE                 = 9.480337e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.7704842027468318
+  effective samples       = 778.7310860637463
+  Blocking SE [primary]    = 9.389096e-04
+  Blocking B              = 9
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/upt2ccsd_bar energy = -572.379063 +/- 0.000939 (1-sigma, blocking)
+[13_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -572.379063 +/- 0.000939
+[13_product AFQMC]   guide energy: -572.386026 +/- 0.001912
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+13_product    256  0 UHF      -570.31344889      -570.31831202   0.8288      -572.15027819      -572.28063185  -572.37906288 0.00093891  -572.38602599 0.00191199      1628     2144
+
+====================================================================================================
+14_educt  (5/22)
+====================================================================================================
+[14_educt] host stage wait 0 s of 2112 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_product/14_product.out
+[14_product] ISOL24 reaction 14 product  C11H12O3  (converted from Bohr to Angstrom): atoms 26, charge 0, electrons 102, basis cc-pVDZ, AOs 256
+******** Runtime ********
+ run_started     = 2026-11-03 22:18:35 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.02s | norb=(242, 242)
+
+******** AFQMC ********
+ nfrozen         = (14, 14)
+ nelec           = (37, 37)
+ norb            = (242, 242)
+ nchol           = 1100
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1100
+  nchol_chunk_used            = 1100
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1100  (1 steps over 1100 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 4241.9 MB
+  memory_per_walker = 310.18 MB  (32.82 MB + 1100 x 258.2 KB)
+  memory_walkers    = 23263.5 MB  (75 walkers in flight)
+  memory_used       = 38683.1 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1100 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[14_product RHF] stable after 1 stability cycle(s), E = -648.183355791669
+[14_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -648.1853772290  3.000000e+02  -650.2725669378  3.000000e+02           0       0.0
+[14_product UHF] stable after 1 stability cycle(s), E = -648.187528518544
+[14_product HF] E(UHF) - E(RHF) = -4.173e-03 Ha, <S^2> = 5.493e-01
+[14_product HF] the UHF is a different solution: unrestricted reference
+[eql   40/200]   10.00  -650.3341870629  3.050631e+02               -             -           0      28.9
+[eql   80/200]   20.00  -650.3840117880  2.963283e+02               -             -           1      48.4
+[eql  120/200]   30.00  -650.3615421668  2.966402e+02               -             -           1      65.7
+[eql  160/200]   40.00  -650.4096314968  2.964867e+02               -             -           4      81.6
+[eql  200/200]   50.00  -650.3670005369  2.961310e+02               -             -           4      97.9
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -650.3789280200   5.481e-03  2.966557e+02  -650.3662125442   2.825e-03           4      2.672     320.7
+[blk  240/1200]  -650.3755730864   4.438e-03  2.965924e+02  -650.3643476459   2.143e-03           9      1.773     533.4
+[blk  360/1200]  -650.3757820491   3.905e-03  2.965689e+02  -650.3651201072   1.531e-03          10      1.777     746.6
+[blk  480/1200]  -650.3762878317   2.943e-03  2.965718e+02  -650.3644468024   1.124e-03          16      1.773     959.4
+[blk  600/1200]  -650.3797935686   2.961e-03  2.965762e+02  -650.3648353559   1.166e-03          19      1.775    1172.4
+[blk  720/1200]  -650.3782885434   2.644e-03  2.965514e+02  -650.3644454302   1.099e-03          24      1.772    1385.1
+[blk  840/1200]  -650.3796028807   2.414e-03  2.965425e+02  -650.3647475454   9.395e-04          30      1.774    1597.9
+[blk  960/1200]  -650.3803643978   2.346e-03  2.965422e+02  -650.3647454874   8.676e-04          33      1.776    1811.1
+[14_product CC] E(MP2) = -650.1507057745  E(CCSD) = -650.2658491017  (UCCSD, 1934 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1256), max_error=1e-05 ...
+[stage] density fitting: nchol=1099 in 17.38s
+[stage] projected chol into the alpha/beta bases (256, 256 orbitals) in 0.92s
+[stage] uchol ham ready: norb=(242, 242) nchol=1099 nelec=(37, 37) frozen=(14, 14) h0=-77.5048681211
+[stage] Hamiltonian ready in 18.58s | norb=(242, 242) nchol=1099
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.06s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/14_product/pt2_stage.h5
+[14_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 22 s)
+[14_product] host stage done in 2007 s
+[blk 1080/1200]  -650.3814349146   2.102e-03  2.965292e+02  -650.3644661216   7.774e-04          44      1.759    2022.2
+[blk 1200/1200]  -650.3807790657   2.133e-03  2.965297e+02  -650.3645700420   7.295e-04          46      1.730    2229.8
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -650.380779065653
+  Gamma SE                 = 2.272195e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.6234837549207934
+  effective samples       = 369.57561058519667
+  Blocking SE [primary]    = 2.133497e-03
+  Blocking B              = 9
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -650.364570042008
+  Gamma SE                 = 7.858470e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 1.0365319092882832
+  effective samples       = 578.8533808013491
+  Blocking SE [primary]    = 7.294964e-04
+  Blocking B              = 4
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/upt2ccsd_bar energy = -650.364570 +/- 0.000729 (1-sigma, blocking)
+[14_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -650.364570 +/- 0.000729
+[14_educt AFQMC]   guide energy: -650.380779 +/- 0.002133
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+14_educt      256  0 UHF      -648.18389468      -648.18537877   0.3968      -650.17065338      -650.27263225  -650.36457004 0.00072950  -650.38077907 0.00213350      2112     2262
+
+====================================================================================================
+14_product  (6/22)
+====================================================================================================
+[14_product] host stage wait 0 s of 2007 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_educt/09_educt.out
+[09_educt] ISOL24 reaction 9 educt  C12H20  (converted from Bohr to Angstrom): atoms 32, charge 0, electrons 92, basis cc-pVDZ, AOs 268
+******** Runtime ********
+ run_started     = 2026-11-03 22:56:16 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.03s | norb=(242, 242)
+[09_educt RHF] stable after 1 stability cycle(s), E = -466.129522681359
+
+******** AFQMC ********
+ nfrozen         = (14, 14)
+ nelec           = (37, 37)
+ norb            = (242, 242)
+ nchol           = 1099
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1099
+  nchol_chunk_used            = 1099
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1099  (1 steps over 1099 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 4239.4 MB
+  memory_per_walker = 309.93 MB  (32.82 MB + 1099 x 258.2 KB)
+  memory_walkers    = 23244.6 MB  (75 walkers in flight)
+  memory_used       = 38650.7 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1099 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[09_educt HF] RHF is stable against RHF -> UHF: restricted reference, E = -466.129522681359
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -648.1874905803  3.000000e+02  -650.2657352575  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -650.2701488224  3.050098e+02               -             -           0      26.3
+[eql   80/200]   20.00  -650.3532639248  2.969336e+02               -             -           0      53.5
+[eql  120/200]   30.00  -650.3629465712  2.968667e+02               -             -           0      70.5
+[eql  160/200]   40.00  -650.3702959195  2.964989e+02               -             -           5      92.4
+[eql  200/200]   50.00  -650.3759525718  2.966456e+02               -             -           5     111.5
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[09_educt CC] E(MP2) = -467.8328393243  E(CCSD) = -467.9560532372  (RCCSD, 303 s)
+[stage] cholesky from density fitting (n_aux=1300), max_error=1e-05 ...
+[stage] density fitting: nchol=1145 in 20.40s
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_educt/pt2_stage.h5...
+[stage] staged inputs written in 0.63s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_educt/pt2_stage.h5
+[09_educt AFQMC] staged (rhf guide, pt2ccsd_bar trial, 22 s)
+[09_educt] host stage done in 355 s
+[blk  120/1200]  -650.3715002650   8.723e-03  2.964648e+02  -650.3614905943   2.834e-03           6      2.874     344.9
+[blk  240/1200]  -650.3656915700   6.353e-03  2.965385e+02  -650.3573942307   2.225e-03           9      1.742     554.0
+[blk  360/1200]  -650.3676974685   5.316e-03  2.965854e+02  -650.3566504817   1.991e-03          11      1.744     763.2
+[blk  480/1200]  -650.3702303209   4.764e-03  2.966050e+02  -650.3565663150   1.550e-03          16      1.743     972.4
+[blk  600/1200]  -650.3681112170   3.895e-03  2.965745e+02  -650.3552553180   1.078e-03          19      1.744    1181.7
+[blk  720/1200]  -650.3690041732   2.786e-03  2.965760e+02  -650.3555498015   1.243e-03          21      1.743    1390.8
+[blk  840/1200]  -650.3697855941   3.149e-03  2.965811e+02  -650.3562808533   1.157e-03          26      1.744    1600.1
+[blk  960/1200]  -650.3685533158   3.328e-03  2.965952e+02  -650.3563023883   1.389e-03          31      1.744    1809.3
+[blk 1080/1200]  -650.3692480002   3.429e-03  2.965996e+02  -650.3566878941   1.065e-03          32      1.744    2018.6
+[blk 1200/1200]  -650.3695738447   3.082e-03  2.966005e+02  -650.3569516673   1.131e-03          37      1.743    2227.7
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -650.369573844672
+  Gamma SE                 = 2.669482e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 2.018325784352609
+  effective samples       = 297.2760912294711
+  Blocking SE [primary]    = 3.082270e-03
+  Blocking B              = 47
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -650.356951667340
+  Gamma SE                 = 9.865673e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 1.049057586721306
+  effective samples       = 571.9419101435819
+  Blocking SE [primary]    = 1.131389e-03
+  Blocking B              = 47
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -650.356952 +/- 0.001131 (1-sigma, blocking)
+[14_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -650.356952 +/- 0.001131
+[14_product AFQMC]   guide energy: -650.369574 +/- 0.003082
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+14_product    256  0 UHF      -648.18335579      -648.18752852   0.5493      -650.15070577      -650.26584910  -650.35695167 0.00113139  -650.36957384 0.00308227      2007     2260
+
+====================================================================================================
+09_educt  (7/22)
+====================================================================================================
+[09_educt] host stage wait 0 s of 355 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_product/09_product.out
+[09_product] ISOL24 reaction 9 product  C12H20  (converted from Bohr to Angstrom): atoms 32, charge 0, electrons 92, basis cc-pVDZ, AOs 268
+******** Runtime ********
+ run_started     = 2026-11-03 23:33:57 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.08s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.00s
+
+******** AFQMC ********
+ nfrozen         = 12
+ nelec           = (34, 34)
+ norb            = 256
+ nchol           = 1145
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1145
+  nchol_chunk_used            = 1145
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1145  (1 steps over 1145 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 2099.4 MB
+  memory_per_walker = 231.96 MB  (24.43 MB + 1145 x 185.6 KB)
+  memory_walkers    = 17397.1 MB  (75 walkers in flight)
+  memory_used       = 27326.5 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1145 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[09_product RHF] stable after 1 stability cycle(s), E = -466.097184642785
+[09_product HF] RHF is stable against RHF -> UHF: restricted reference, E = -466.097184642785
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -466.1294640598  3.000000e+02  -467.9559552166  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -467.9669596020  3.042414e+02               -             -           0      21.1
+[eql   80/200]   20.00  -468.0492472293  2.966356e+02               -             -           1      33.7
+[eql  120/200]   30.00  -468.0230025077  2.966028e+02               -             -           2      43.2
+[eql  160/200]   40.00  -468.0392895276  2.968305e+02               -             -           2      56.3
+[eql  200/200]   50.00  -468.0377884564  2.966240e+02               -             -           2      65.7
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -468.0230773327   4.207e-03  2.967543e+02  -468.0238484775   1.022e-03           2      1.848     221.8
+[09_product CC] E(MP2) = -467.7947355612  E(CCSD) = -467.9203829447  (RCCSD, 304 s)
+[stage] cholesky from density fitting (n_aux=1300), max_error=1e-05 ...
+[stage] density fitting: nchol=1146 in 20.24s
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_product/pt2_stage.h5...
+[stage] staged inputs written in 0.64s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/09_product/pt2_stage.h5
+[09_product AFQMC] staged (rhf guide, pt2ccsd_bar trial, 22 s)
+[09_product] host stage done in 365 s
+[blk  240/1200]  -468.0254667909   3.193e-03  2.967492e+02  -468.0251685426   8.708e-04           2      1.121     356.3
+[blk  360/1200]  -468.0253512199   2.678e-03  2.967398e+02  -468.0253044994   7.482e-04           2      1.075     485.3
+[blk  480/1200]  -468.0305465879   2.894e-03  2.967013e+02  -468.0253502951   6.129e-04           2      1.076     614.4
+[blk  600/1200]  -468.0303988913   2.164e-03  2.966929e+02  -468.0253349861   5.400e-04           2      1.075     743.4
+[blk  720/1200]  -468.0323057725   2.356e-03  2.966918e+02  -468.0251663515   4.752e-04           2      1.075     872.4
+[blk  840/1200]  -468.0322870601   1.842e-03  2.966895e+02  -468.0250701901   4.580e-04           2      1.073    1001.2
+[blk  960/1200]  -468.0324323419   2.188e-03  2.966853e+02  -468.0251271789   4.175e-04           2      1.075    1130.2
+[blk 1080/1200]  -468.0321625037   2.042e-03  2.966846e+02  -468.0249402587   3.944e-04           2      1.072    1258.9
+[blk 1200/1200]  -468.0318927582   1.525e-03  2.966969e+02  -468.0248914072   3.732e-04           2      1.076    1388.0
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -468.031892758153
+  Gamma SE                 = 1.635643e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.4610783953189352
+  effective samples       = 410.6555828368316
+  Blocking SE [primary]    = 1.525036e-03
+  Blocking B              = 7
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -468.024891407199
+  Gamma SE                 = 3.859722e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 0.8540737509487855
+  effective samples       = 702.5154435825519
+  Blocking SE [primary]    = 3.731548e-04
+  Blocking B              = 11
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/pt2ccsd_bar energy = -468.024891 +/- 0.000373 (1-sigma, blocking)
+[09_educt AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -468.024891 +/- 0.000373
+[09_educt AFQMC]   guide energy: -468.031893 +/- 0.001525
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+09_educt      268  0 RHF      -466.12952268                  -   0.0000      -467.83283932      -467.95605324  -468.02489141 0.00037315  -468.03189276 0.00152504       355     1430
+
+====================================================================================================
+09_product  (8/22)
+====================================================================================================
+[09_product] host stage wait 0 s of 365 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_educt/20_educt.out
+[20_educt] ISOL24 reaction 20 educt  C14H12F2  (converted from Bohr to Angstrom): atoms 28, charge 0, electrons 114, basis cc-pVDZ, AOs 284
+******** Runtime ********
+ run_started     = 2026-11-03 23:57:47 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.00s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.00s
+
+******** AFQMC ********
+ nfrozen         = 12
+ nelec           = (34, 34)
+ norb            = 256
+ nchol           = 1146
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1146
+  nchol_chunk_used            = 1146
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1146  (1 steps over 1146 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 2100.8 MB
+  memory_per_walker = 232.14 MB  (24.43 MB + 1146 x 185.6 KB)
+  memory_walkers    = 17410.7 MB  (75 walkers in flight)
+  memory_used       = 27349.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1146 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[20_educt RHF] stable after 1 stability cycle(s), E = -736.076427191860
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -466.0971204181  3.000000e+02  -467.9202629585  3.000000e+02           0       0.0
+[20_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   40/200]   10.00  -467.9423582690  3.040993e+02               -             -           0      17.9
+[20_educt UHF] stable after 1 stability cycle(s), E = -736.083557660103
+[20_educt HF] E(UHF) - E(RHF) = -7.130e-03 Ha, <S^2> = 9.614e-01
+[20_educt HF] the UHF is a different solution: unrestricted reference
+[eql   80/200]   20.00  -468.0046408582  2.968767e+02               -             -           0      36.6
+[eql  120/200]   30.00  -467.9968275440  2.967109e+02               -             -           0      46.3
+[eql  160/200]   40.00  -467.9959275912  2.967013e+02               -             -           0      55.1
+[eql  200/200]   50.00  -467.9830753404  2.968526e+02               -             -           1      64.5
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -467.9971564755   5.513e-03  2.966819e+02  -467.9886238147   1.232e-03           1      1.746     209.6
+[blk  240/1200]  -467.9987896847   4.097e-03  2.966912e+02  -467.9899114973   9.662e-04           1      1.117     343.6
+[blk  360/1200]  -467.9996660409   2.782e-03  2.966961e+02  -467.9902929980   9.160e-04           8      1.114     477.3
+[blk  480/1200]  -468.0008481856   3.081e-03  2.967079e+02  -467.9908243210   7.734e-04           8      1.108     610.3
+[blk  600/1200]  -467.9995944682   2.563e-03  2.967283e+02  -467.9903705495   7.018e-04           8      1.111     743.6
+[blk  720/1200]  -467.9996176713   2.118e-03  2.967193e+02  -467.9901424481   5.889e-04           9      1.110     876.8
+[blk  840/1200]  -467.9998565735   2.128e-03  2.967027e+02  -467.9901152971   5.531e-04          11      1.115    1010.6
+[blk  960/1200]  -467.9996930335   1.889e-03  2.967146e+02  -467.9897833274   4.854e-04          11      1.107    1143.4
+[blk 1080/1200]  -467.9994368323   1.908e-03  2.967082e+02  -467.9896323646   4.974e-04          12      1.115    1277.2
+[blk 1200/1200]  -467.9979103173   2.017e-03  2.967135e+02  -467.9893153410   5.015e-04          12      1.117    1411.2
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -467.997910317256
+  Gamma SE                 = 1.859733e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 1.864139129188733
+  effective samples       = 321.86438801974936
+  Blocking SE [primary]    = 2.017017e-03
+  Blocking B              = 60
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -467.989315340979
+  Gamma SE                 = 4.933994e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.1536400457805502
+  effective samples       = 520.0929026298159
+  Blocking SE [primary]    = 5.015215e-04
+  Blocking B              = 14
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/pt2ccsd_bar energy = -467.989315 +/- 0.000502 (1-sigma, blocking)
+[09_product AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -467.989315 +/- 0.000502
+[09_product AFQMC]   guide energy: -467.997910 +/- 0.002017
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+09_product    268  0 RHF      -466.09718464                  -   0.0000      -467.79473556      -467.92038294  -467.98931534 0.00050152  -467.99791032 0.00201702       365     1438
+
+====================================================================================================
+20_educt  (9/22)
+====================================================================================================
+[20_educt CC] E(MP2) = -738.2169115797  E(CCSD) = -738.3610427219  (UCCSD, 2768 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1396), max_error=1e-05 ...
+[stage] density fitting: nchol=1216 in 25.72s
+[stage] projected chol into the alpha/beta bases (284, 284 orbitals) in 1.20s
+[stage] uchol ham ready: norb=(268, 268) nchol=1216 nelec=(41, 41) frozen=(16, 16) h0=-67.5263545858
+[stage] Hamiltonian ready in 27.26s | norb=(268, 268) nchol=1216
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.42s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_educt/pt2_stage.h5
+[20_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 32 s)
+[20_educt] host stage done in 2859 s
+[20_educt] host stage wait 1421 s of 2859 s (50% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_product/20_product.out
+[20_product] ISOL24 reaction 20 product  C14H12F2  (converted from Bohr to Angstrom): atoms 28, charge 0, electrons 114, basis cc-pVDZ, AOs 284
+******** Runtime ********
+ run_started     = 2026-11-04 00:45:26 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.01s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.04s | norb=(268, 268)
+[20_product RHF] stable after 1 stability cycle(s), E = -736.068594402402
+
+******** AFQMC ********
+ nfrozen         = (16, 16)
+ nelec           = (41, 41)
+ norb            = (268, 268)
+ nchol           = 1216
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1216
+  nchol_chunk_used            = 1216
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1216  (1 steps over 1216 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 5927.0 MB
+  memory_per_walker = 376.49 MB  (30.22 MB + 1216 x 291.6 KB)
+  memory_walkers    = 28237.1 MB  (75 walkers in flight)
+  memory_used       = 52822.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1216 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[20_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -736.0835207689  3.000000e+02  -738.3609219970  3.000000e+02           0       0.0
+[20_product UHF] stable after 1 stability cycle(s), E = -736.075676425206
+[20_product HF] E(UHF) - E(RHF) = -7.082e-03 Ha, <S^2> = 9.585e-01
+[20_product HF] the UHF is a different solution: unrestricted reference
+[eql   40/200]   10.00  -738.3700462460  3.055577e+02               -             -           0      32.7
+[eql   80/200]   20.00  -738.4685335268  2.966993e+02               -             -           0      59.9
+[eql  120/200]   30.00  -738.4991520092  2.966408e+02               -             -           0      82.6
+[eql  160/200]   40.00  -738.4897444142  2.965099e+02               -             -           0     102.8
+[eql  200/200]   50.00  -738.4965185346  2.967393e+02               -             -           0     122.7
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -738.4663116370   6.078e-03  2.965548e+02  -738.4658628979   1.621e-03           1      3.806     456.8
+[blk  240/1200]  -738.4763626439   6.138e-03  2.965671e+02  -738.4669813403   1.359e-03           3      2.713     782.3
+[blk  360/1200]  -738.4767959477   4.807e-03  2.965469e+02  -738.4671396184   1.130e-03           6      2.708    1107.3
+[blk  480/1200]  -738.4750290855   4.093e-03  2.965716e+02  -738.4657667163   9.511e-04           7      2.711    1432.5
+[blk  600/1200]  -738.4781044923   2.933e-03  2.965575e+02  -738.4662634166   8.587e-04           9      2.714    1758.2
+[blk  720/1200]  -738.4757883218   3.288e-03  2.965565e+02  -738.4652678440   8.022e-04          10      2.712    2083.6
+[blk  840/1200]  -738.4752950867   3.044e-03  2.965596e+02  -738.4657439030   9.162e-04          15      2.706    2408.3
+[blk  960/1200]  -738.4757090036   2.947e-03  2.965425e+02  -738.4656227579   7.101e-04          16      2.714    2734.0
+[20_product CC] E(MP2) = -738.2058914936  E(CCSD) = -738.3515268245  (UCCSD, 2898 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1396), max_error=1e-05 ...
+[stage] density fitting: nchol=1222 in 27.43s
+[stage] projected chol into the alpha/beta bases (284, 284 orbitals) in 1.31s
+[stage] uchol ham ready: norb=(268, 268) nchol=1222 nelec=(41, 41) frozen=(16, 16) h0=-56.9897970489
+[stage] Hamiltonian ready in 29.08s | norb=(268, 268) nchol=1222
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.46s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/20_product/pt2_stage.h5
+[20_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 33 s)
+[20_product] host stage done in 2991 s
+[blk 1080/1200]  -738.4767990002   2.771e-03  2.965373e+02  -738.4656018599   6.836e-04          20      2.685    3056.1
+[blk 1200/1200]  -738.4759235680   2.753e-03  2.965426e+02  -738.4653669908   7.055e-04          23      2.667    3376.2
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -738.475923567979
+  Gamma SE                 = 2.383904e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 1.9946366970947318
+  effective samples       = 300.80665861303163
+  Blocking SE [primary]    = 2.752901e-03
+  Blocking B              = 60
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -738.465366990753
+  Gamma SE                 = 6.874156e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.1089155683306222
+  effective samples       = 541.0691464123358
+  Blocking SE [primary]    = 7.055004e-04
+  Blocking B              = 29
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -738.465367 +/- 0.000706 (1-sigma, blocking)
+[20_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -738.465367 +/- 0.000706
+[20_educt AFQMC]   guide energy: -738.475924 +/- 0.002753
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+20_educt      284  0 UHF      -736.07642719      -736.08355766   0.9614      -738.21691158      -738.36104272  -738.46536699 0.00070550  -738.47592357 0.00275290      2859     3425
+
+====================================================================================================
+20_product  (10/22)
+====================================================================================================
+[20_product] host stage wait 0 s of 2991 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_educt/05_educt.out
+[05_educt] ISOL24 reaction 5 educt  C15H16O  (converted from Bohr to Angstrom): atoms 32, charge 0, electrons 114, basis cc-pVDZ, AOs 304
+******** Runtime ********
+ run_started     = 2026-11-04 01:42:31 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.04s | norb=(268, 268)
+[05_educt RHF] stable after 1 stability cycle(s), E = -652.232144816316
+
+******** AFQMC ********
+ nfrozen         = (16, 16)
+ nelec           = (41, 41)
+ norb            = (268, 268)
+ nchol           = 1222
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1222
+  nchol_chunk_used            = 1222
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1222  (1 steps over 1222 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 5945.5 MB
+  memory_per_walker = 414.20 MB  (47.98 MB + 1222 x 306.9 KB)
+  memory_walkers    = 31065.3 MB  (75 walkers in flight)
+  memory_used       = 53061.3 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1222 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -736.0756440579  3.000000e+02  -738.3514184608  3.000000e+02           0       0.0
+[05_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   40/200]   10.00  -738.3577129317  3.057600e+02               -             -           0      31.1
+[05_educt UHF] cycle 1: internal instability or unconverged SCF; rotating the orbitals and restarting with the second-order solver
+[eql   80/200]   20.00  -738.4510891003  2.967000e+02               -             -           0      64.8
+[eql  120/200]   30.00  -738.4659779363  2.964943e+02               -             -           5      88.0
+[eql  160/200]   40.00  -738.4849443716  2.965635e+02               -             -           6     111.3
+[05_educt UHF] stable after 2 stability cycle(s), E = -652.235981509720
+[05_educt HF] E(UHF) - E(RHF) = -3.837e-03 Ha, <S^2> = 5.176e-01
+[05_educt HF] the UHF is a different solution: unrestricted reference
+[eql  200/200]   50.00  -738.4616384970  2.961993e+02               -             -           6     134.3
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -738.4749929718   5.254e-03  2.965004e+02  -738.4586989440   1.668e-03          16      3.940     472.8
+[blk  240/1200]  -738.4604765471   5.175e-03  2.965048e+02  -738.4549491153   1.583e-03          16      2.747     802.5
+[blk  360/1200]  -738.4620967279   4.165e-03  2.964767e+02  -738.4553580462   1.127e-03          16      2.765    1134.4
+[blk  480/1200]  -738.4608166274   3.350e-03  2.964932e+02  -738.4543578329   1.106e-03          18      2.756    1465.1
+[blk  600/1200]  -738.4634676075   3.101e-03  2.964883e+02  -738.4552757548   1.121e-03          22      2.769    1797.3
+[blk  720/1200]  -738.4648685702   2.853e-03  2.965135e+02  -738.4556774103   1.116e-03          22      2.764    2129.0
+[blk  840/1200]  -738.4660265764   3.181e-03  2.965135e+02  -738.4563566918   1.009e-03          26      2.762    2460.5
+[blk  960/1200]  -738.4652704296   3.004e-03  2.965266e+02  -738.4563323759   9.572e-04          31      2.760    2791.8
+[blk 1080/1200]  -738.4654261503   2.849e-03  2.965252e+02  -738.4563159989   8.987e-04          32      2.769    3124.0
+[blk 1200/1200]  -738.4671599467   3.132e-03  2.965086e+02  -738.4563871710   7.357e-04          34      2.765    3455.8
+
+Rejected 1 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -738.466324646519
+  Gamma SE                 = 2.405821e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 1.9814010423202837
+  effective samples       = 302.5636845824843
+  Blocking SE [primary]    = 2.920210e-03
+  Blocking B              = 59
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -738.456387170997
+  Gamma SE                 = 7.581845e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.2067217711238443
+  effective samples       = 497.2148629101205
+  Blocking SE [primary]    = 7.357202e-04
+  Blocking B              = 14
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/upt2ccsd_bar energy = -738.456387 +/- 0.000736 (1-sigma, blocking)
+[20_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -738.456387 +/- 0.000736
+[20_product AFQMC]   guide energy: -738.466325 +/- 0.002920
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+20_product    284  0 UHF      -736.06859440      -736.07567643   0.9585      -738.20589149      -738.35152682  -738.45638717 0.00073572  -738.46632465 0.00292021      2991     3489
+
+====================================================================================================
+05_educt  (11/22)
+====================================================================================================
+[05_educt CC] E(MP2) = -654.3878806369  E(CCSD) = -654.5264590417  (UCCSD, 3639 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1488), max_error=1e-05 ...
+[stage] density fitting: nchol=1296 in 31.96s
+[stage] projected chol into the alpha/beta bases (304, 304 orbitals) in 1.40s
+[stage] uchol ham ready: norb=(288, 288) nchol=1296 nelec=(41, 41) frozen=(16, 16) h0=17.3253415673
+[stage] Hamiltonian ready in 33.78s | norb=(288, 288) nchol=1296
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.76s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_educt/pt2_stage.h5
+[05_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 39 s)
+[05_educt] host stage done in 3832 s
+[05_educt] host stage wait 342 s of 3832 s (91% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_product/05_product.out
+[05_product] ISOL24 reaction 5 product  C15H16O  (converted from Bohr to Angstrom): atoms 32, charge 0, electrons 114, basis cc-pVDZ, AOs 304
+******** Runtime ********
+ run_started     = 2026-11-04 02:46:23 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.03s | norb=(288, 288)
+
+******** AFQMC ********
+ nfrozen         = (16, 16)
+ nelec           = (41, 41)
+ norb            = (288, 288)
+ nchol           = 1296
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 648
+[05_product RHF] stable after 1 stability cycle(s), E = -652.189838042987
+  nchol_chunk_used            = 648
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 648  (2 steps over 1296 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 7135.5 MB
+  memory_per_walker = 542.84 MB  (28.30 MB + 648 x 813.1 KB)
+  memory_walkers    = 40713.1 MB  (75 walkers in flight)
+  memory_used       = 30853.7 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 6 compiles
+
+ guide energy    = 648 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[05_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -652.2359289197  3.000000e+02  -654.5263116250  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -654.5386988521  3.055969e+02               -             -           0      31.2
+[05_product UHF] cycle 1: internal instability or unconverged SCF; rotating the orbitals and restarting with the second-order solver
+[eql   80/200]   20.00  -654.6508448974  2.962850e+02               -             -           0      64.1
+[eql  120/200]   30.00  -654.6351773142  2.959434e+02               -             -           0      87.4
+[05_product UHF] stable after 2 stability cycle(s), E = -652.198393570480
+[05_product HF] E(UHF) - E(RHF) = -8.556e-03 Ha, <S^2> = 1.163e+00
+[05_product HF] the UHF is a different solution: unrestricted reference
+[eql  160/200]   40.00  -654.6599881244  2.961288e+02               -             -           0     110.3
+[eql  200/200]   50.00  -654.6377501012  2.962967e+02               -             -           1     131.8
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -654.6544819032   5.508e-03  2.961033e+02  -654.6334320445   2.718e-03           4      4.528     543.4
+[blk  240/1200]  -654.6503650450   5.053e-03  2.961161e+02  -654.6299338297   2.974e-03           7      3.283     937.3
+[blk  360/1200]  -654.6493432504   3.572e-03  2.961307e+02  -654.6314350991   2.492e-03           7      3.295    1332.7
+[blk  480/1200]  -654.6488592550   2.915e-03  2.961559e+02  -654.6311855371   1.940e-03           7      3.300    1728.7
+[blk  600/1200]  -654.6460543679   2.718e-03  2.961583e+02  -654.6307906602   1.459e-03          10      3.304    2125.2
+[blk  720/1200]  -654.6441573149   2.346e-03  2.961515e+02  -654.6307292468   1.411e-03          11      3.302    2521.4
+[blk  840/1200]  -654.6449800012   2.493e-03  2.961446e+02  -654.6307623569   1.323e-03          16      3.313    2918.9
+[blk  960/1200]  -654.6450347556   2.107e-03  2.961510e+02  -654.6311198704   9.486e-04          16      3.305    3315.5
+[blk 1080/1200]  -654.6463748311   2.031e-03  2.961464e+02  -654.6316001069   1.146e-03          17      3.306    3712.2
+[blk 1200/1200]  -654.6462316389   2.084e-03  2.961357e+02  -654.6315581705   9.324e-04          17      3.302    4108.4
+
+Rejected 1 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -654.645859947759
+  Gamma SE                 = 2.067838e-03
+  Gamma reliable          = yes
+  Gamma window W          = 8
+  tau_int                 = 1.4239531588086953
+  effective samples       = 421.0110397883821
+  Blocking SE [primary]    = 2.077316e-03
+  Blocking B              = 11
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -654.631558170513
+  Gamma SE                 = 9.336522e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 1.0104822786697312
+  effective samples       = 593.7758758024747
+  Blocking SE [primary]    = 9.324173e-04
+  Blocking B              = 7
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -654.631558 +/- 0.000932 (1-sigma, blocking)
+[05_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -654.631558 +/- 0.000932
+[05_educt AFQMC]   guide energy: -654.645860 +/- 0.002077
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+05_educt      304  0 UHF      -652.23214482      -652.23598151   0.5176      -654.38788064      -654.52645904  -654.63155817 0.00093242  -654.64585995 0.00207732      3832     4152
+
+====================================================================================================
+05_product  (12/22)
+====================================================================================================
+[05_product CC] E(MP2) = -654.2869800663  E(CCSD) = -654.4675653796  (UCCSD, 4087 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1488), max_error=1e-05 ...
+[stage] density fitting: nchol=1297 in 31.83s
+[stage] projected chol into the alpha/beta bases (304, 304 orbitals) in 1.42s
+[stage] uchol ham ready: norb=(288, 288) nchol=1297 nelec=(41, 41) frozen=(16, 16) h0=-18.1435520270
+[stage] Hamiltonian ready in 33.67s | norb=(288, 288) nchol=1297
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.77s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/05_product/pt2_stage.h5
+[05_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 39 s)
+[05_product] host stage done in 4268 s
+[05_product] host stage wait 116 s of 4268 s (97% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_educt/10_educt.out
+[10_educt] ISOL24 reaction 10 educt  C14H20O  (converted from Bohr to Angstrom): atoms 35, charge 0, electrons 112, basis cc-pVDZ, AOs 310
+******** Runtime ********
+ run_started     = 2026-11-04 03:57:32 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.02s | norb=(288, 288)
+
+******** AFQMC ********
+ nfrozen         = (16, 16)
+ nelec           = (41, 41)
+ norb            = (288, 288)
+ nchol           = 1297
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1297
+  nchol_chunk_used            = 1297
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1297  (1 steps over 1297 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 7139.0 MB
+  memory_per_walker = 463.76 MB  (58.14 MB + 1297 x 320.2 KB)
+  memory_walkers    = 34782.2 MB  (75 walkers in flight)
+  memory_used       = 61057.3 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1297 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[10_educt RHF] stable after 1 stability cycle(s), E = -616.668922615629
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -652.1983273591  3.000000e+02  -654.4674133479  3.000000e+02           0       0.0
+[10_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   40/200]   10.00  -654.4615277986  3.051867e+02               -             -           1      34.5
+[10_educt UHF] stable after 1 stability cycle(s), E = -616.671898547046
+[10_educt HF] E(UHF) - E(RHF) = -2.976e-03 Ha, <S^2> = 4.525e-01
+[10_educt HF] the UHF is a different solution: unrestricted reference
+[eql   80/200]   20.00  -654.5842127082  2.964791e+02               -             -           1      68.6
+[eql  120/200]   30.00  -654.5883800113  2.959933e+02               -             -           5      92.0
+[eql  160/200]   40.00  -654.6016447301  2.959771e+02               -             -           8     116.3
+[eql  200/200]   50.00  -654.5749561621  2.958642e+02               -             -           9     142.3
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -654.5906682656   4.839e-03  2.962479e+02  -654.5789828086   1.981e-03          11      4.620     554.4
+[blk  240/1200]  -654.5906607634   3.750e-03  2.960948e+02  -654.5783941350   1.993e-03          20      3.342     955.4
+[blk  360/1200]  -654.5949562049   3.618e-03  2.960647e+02  -654.5833911691   5.036e-03          29      3.348    1357.2
+[blk  480/1200]  -654.5951346738   3.078e-03  2.960665e+02  -654.5814808412   3.926e-03          34      3.342    1758.3
+[blk  600/1200]  -654.5904409143   3.585e-03  2.960688e+02  -654.5796828600   3.143e-03          41      3.353    2160.6
+[blk  720/1200]  -654.5899631312   3.141e-03  2.960448e+02  -654.5788952476   2.646e-03          45      3.344    2562.0
+[blk  840/1200]  -654.5909758482   2.969e-03  2.960716e+02  -654.5785605537   2.270e-03          49      3.358    2964.9
+[blk  960/1200]  -654.5911717244   2.853e-03  2.960582e+02  -654.5789526823   1.965e-03          50      3.345    3366.3
+[blk 1080/1200]  -654.5918899757   2.646e-03  2.960405e+02  -654.5788021391   1.757e-03          63      3.340    3767.0
+[10_educt CC] E(MP2) = -618.7638358751  E(CCSD) = -618.9142088342  (UCCSD, 3759 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1510), max_error=1e-05 ...
+[stage] density fitting: nchol=1327 in 34.03s
+[stage] projected chol into the alpha/beta bases (310, 310 orbitals) in 1.73s
+[stage] uchol ham ready: norb=(295, 295) nchol=1327 nelec=(41, 41) frozen=(15, 15) h0=39.8112850301
+[stage] Hamiltonian ready in 36.18s | norb=(295, 295) nchol=1327
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.91s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_educt/pt2_stage.h5
+[10_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 42 s)
+[10_educt] host stage done in 3884 s
+[blk 1200/1200]  -654.5911165045   2.464e-03  2.960279e+02  -654.5790892915   1.701e-03          66      3.277    4160.3
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -654.591116504504
+  Gamma SE                 = 2.142411e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.558725784759432
+  effective samples       = 384.9297970602326
+  Blocking SE [primary]    = 2.463972e-03
+  Blocking B              = 60
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -654.579089291548
+  Gamma SE                 = 1.632389e-03
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.1999113972443927
+  effective samples       = 500.03692054088776
+  Blocking SE [primary]    = 1.700509e-03
+  Blocking B              = 18
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -654.579089 +/- 0.001701 (1-sigma, blocking)
+[05_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -654.579089 +/- 0.001701
+[05_product AFQMC]   guide energy: -654.591117 +/- 0.002464
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+05_product    304  0 UHF      -652.18983804      -652.19839357   1.1626      -654.28698007      -654.46756538  -654.57908929 0.00170051  -654.59111650 0.00246397      4268     4190
+
+====================================================================================================
+10_educt  (13/22)
+====================================================================================================
+[10_educt] host stage wait 0 s of 3884 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_product/10_product.out
+[10_product] ISOL24 reaction 10 product  C14H20O  (converted from Bohr to Angstrom): atoms 35, charge 0, electrons 112, basis cc-pVDZ, AOs 310
+******** Runtime ********
+ run_started     = 2026-11-04 05:07:22 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.00s | norb=(295, 295)
+
+******** AFQMC ********
+ nfrozen         = (15, 15)
+ nelec           = (41, 41)
+ norb            = (295, 295)
+ nchol           = 1327
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1327
+[10_product RHF] stable after 1 stability cycle(s), E = -616.668261825510
+  nchol_chunk_used            = 1327
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1327  (1 steps over 1327 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 7603.4 MB
+  memory_per_walker = 496.29 MB  (61.58 MB + 1327 x 335.5 KB)
+  memory_walkers    = 37222.0 MB  (75 walkers in flight)
+  memory_used       = 64162.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1327 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[10_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -616.6718420864  3.000000e+02  -618.9140631511  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -618.9480701932  3.050742e+02               -             -           1      33.0
+[10_product UHF] cycle 1: internal instability or unconverged SCF; rotating the orbitals and restarting with the second-order solver
+[eql   80/200]   20.00  -618.9968551336  2.961949e+02               -             -           1      67.0
+[eql  120/200]   30.00  -619.0210295369  2.962719e+02               -             -           1      93.0
+[10_product UHF] stable after 2 stability cycle(s), E = -616.670872793150
+[10_product HF] E(UHF) - E(RHF) = -2.611e-03 Ha, <S^2> = 4.382e-01
+[10_product HF] the UHF is a different solution: unrestricted reference
+[eql  160/200]   40.00  -619.0102634118  2.958570e+02               -             -           1     118.3
+[eql  200/200]   50.00  -619.0067266299  2.960124e+02               -             -           1     142.9
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -619.0284670931   6.400e-03  2.961641e+02  -619.0131374212   2.024e-03           1      4.867     584.1
+[blk  240/1200]  -619.0238803062   4.814e-03  2.961292e+02  -619.0112069127   1.508e-03           4      3.585    1014.3
+[blk  360/1200]  -619.0253131088   3.859e-03  2.961278e+02  -619.0112085421   1.247e-03           5      3.590    1445.1
+[blk  480/1200]  -619.0235801333   3.357e-03  2.961284e+02  -619.0113746283   1.037e-03           5      3.572    1873.7
+[blk  600/1200]  -619.0232049798   3.228e-03  2.961299e+02  -619.0112089637   9.744e-04           5      3.582    2303.6
+[blk  720/1200]  -619.0221570064   2.834e-03  2.961382e+02  -619.0111312124   1.116e-03           7      3.567    2731.6
+[blk  840/1200]  -619.0223954285   2.557e-03  2.961546e+02  -619.0115958765   7.932e-04          10      3.583    3161.5
+[blk  960/1200]  -619.0227499504   2.417e-03  2.961506e+02  -619.0119475734   9.573e-04          12      3.574    3590.4
+[10_product CC] E(MP2) = -618.7511493584  E(CCSD) = -618.9056439502  (UCCSD, 3758 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1510), max_error=1e-05 ...
+[stage] density fitting: nchol=1327 in 35.66s
+[stage] projected chol into the alpha/beta bases (310, 310 orbitals) in 1.74s
+[stage] uchol ham ready: norb=(295, 295) nchol=1327 nelec=(41, 41) frozen=(15, 15) h0=39.0214698886
+[stage] Hamiltonian ready in 37.85s | norb=(295, 295) nchol=1327
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 1.93s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/10_product/pt2_stage.h5
+[10_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 43 s)
+[10_product] host stage done in 3939 s
+[blk 1080/1200]  -619.0226132002   2.232e-03  2.961499e+02  -619.0117617767   8.320e-04          14      3.533    4014.3
+[blk 1200/1200]  -619.0220761441   2.409e-03  2.961577e+02  -619.0116016383   8.182e-04          15      3.503    4434.7
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -619.022076144081
+  Gamma SE                 = 2.328519e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 1.8406107322078402
+  effective samples       = 325.9787577573727
+  Blocking SE [primary]    = 2.408983e-03
+  Blocking B              = 29
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -619.011601638253
+  Gamma SE                 = 7.381160e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 1.0355104287808254
+  effective samples       = 579.4243914147919
+  Blocking SE [primary]    = 8.181560e-04
+  Blocking B              = 29
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -619.011602 +/- 0.000818 (1-sigma, blocking)
+[10_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -619.011602 +/- 0.000818
+[10_educt AFQMC]   guide energy: -619.022076 +/- 0.002409
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+10_educt      310  0 UHF      -616.66892262      -616.67189855   0.4525      -618.76383588      -618.91420883  -619.01160164 0.00081816  -619.02207614 0.00240898      3884     4479
+
+====================================================================================================
+10_product  (14/22)
+====================================================================================================
+[10_product] host stage wait 0 s of 3939 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_educt/02_educt.out
+[02_educt] ISOL24 reaction 2 educt  C15H24O2  (converted from Bohr to Angstrom): atoms 41, charge 0, electrons 130, basis cc-pVDZ, AOs 358
+******** Runtime ********
+ run_started     = 2026-11-04 06:22:01 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.01s | norb=(295, 295)
+
+******** AFQMC ********
+ nfrozen         = (15, 15)
+ nelec           = (41, 41)
+ norb            = (295, 295)
+ nchol           = 1327
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1327
+  nchol_chunk_used            = 1327
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1327  (1 steps over 1327 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 7603.4 MB
+  memory_per_walker = 496.29 MB  (61.58 MB + 1327 x 335.5 KB)
+  memory_walkers    = 37222.0 MB  (75 walkers in flight)
+  memory_used       = 64162.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1327 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -616.6708294823  3.000000e+02  -618.9055167210  3.000000e+02           0       0.0
+[02_educt RHF] stable after 1 stability cycle(s), E = -731.775376407443
+[eql   40/200]   10.00  -618.9189926849  3.049512e+02               -             -           0      34.4
+[02_educt HF] RHF is stable against RHF -> UHF: restricted reference, E = -731.775376407443
+[eql   80/200]   20.00  -618.9908078535  2.963765e+02               -             -           0      68.9
+[eql  120/200]   30.00  -619.0278544458  2.963697e+02               -             -           0      95.4
+[eql  160/200]   40.00  -619.0394848258  2.957702e+02               -             -           0     123.1
+[eql  200/200]   50.00  -619.0248031155  2.958886e+02               -             -           0     146.9
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -619.0239662010   1.037e-02  2.960839e+02  -619.0038785043   3.743e-03           3      4.882     585.8
+[blk  240/1200]  -619.0147872454   6.584e-03  2.961099e+02  -619.0048067494   2.310e-03           3      3.582    1015.6
+[02_educt CC] E(MP2) = -734.2376693400  E(CCSD) = -734.3938121850  (RCCSD, 1337 s)
+[stage] cholesky from density fitting (n_aux=1742), max_error=1e-05 ...
+[blk  360/1200]  -619.0146929264   5.138e-03  2.961022e+02  -619.0032723269   1.567e-03           3      3.580    1445.2
+[stage] density fitting: nchol=1531 in 63.43s
+[stage] building trial input...
+[stage] trial input ready in 0.01s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_educt/pt2_stage.h5...
+[stage] staged inputs written in 1.48s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_educt/pt2_stage.h5
+[02_educt AFQMC] staged (rhf guide, pt2ccsd_bar trial, 69 s)
+[02_educt] host stage done in 1480 s
+[blk  480/1200]  -619.0176884933   4.034e-03  2.960968e+02  -619.0031043972   1.386e-03           5      3.504    1865.7
+[blk  600/1200]  -619.0168149622   3.634e-03  2.960954e+02  -619.0030624183   1.195e-03           8      3.504    2286.2
+[blk  720/1200]  -619.0139960640   3.280e-03  2.960930e+02  -619.0031786995   1.069e-03           8      3.507    2707.1
+[blk  840/1200]  -619.0144080361   3.327e-03  2.961032e+02  -619.0033642749   1.022e-03           8      3.504    3127.6
+[blk  960/1200]  -619.0153443819   2.476e-03  2.961020e+02  -619.0030282024   9.676e-04           9      3.502    3547.9
+[blk 1080/1200]  -619.0154543552   2.279e-03  2.960940e+02  -619.0028546810   8.332e-04          10      3.508    3968.8
+[blk 1200/1200]  -619.0157810849   2.186e-03  2.960946e+02  -619.0027417669   7.606e-04          12      3.505    4389.4
+
+Rejected 1 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -619.015253345518
+  Gamma SE                 = 2.151523e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.6267215843709768
+  effective samples       = 368.5326399795793
+  Blocking SE [primary]    = 2.617051e-03
+  Blocking B              = 59
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -619.002741766901
+  Gamma SE                 = 7.878528e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.8779539455030662
+  effective samples       = 683.4071457543265
+  Blocking SE [primary]    = 7.606014e-04
+  Blocking B              = 5
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -619.002742 +/- 0.000761 (1-sigma, blocking)
+[10_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -619.002742 +/- 0.000761
+[10_product AFQMC]   guide energy: -619.015253 +/- 0.002617
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+10_product    310  0 UHF      -616.66826183      -616.67087279   0.4382      -618.75114936      -618.90564395  -619.00274177 0.00076060  -619.01525335 0.00261705      3939     4415
+
+====================================================================================================
+02_educt  (15/22)
+====================================================================================================
+[02_educt] host stage wait 0 s of 1480 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_product/02_product.out
+[02_product] ISOL24 reaction 2 product  C15H24O2  (converted from Bohr to Angstrom): atoms 41, charge 0, electrons 130, basis cc-pVDZ, AOs 358
+******** Runtime ********
+ run_started     = 2026-11-04 07:35:37 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.07s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.00s
+
+******** AFQMC ********
+ nfrozen         = 17
+ nelec           = (48, 48)
+ norb            = 341
+ nchol           = 1531
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1531
+  nchol_chunk_used            = 1531
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1531  (1 steps over 1531 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 5439.9 MB
+  memory_per_walker = 260.89 MB  (89.49 MB + 1531 x 114.6 KB)
+  memory_walkers    = 19566.6 MB  (75 walkers in flight)
+  memory_used       = 62856.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1531 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[02_product RHF] stable after 1 stability cycle(s), E = -731.736949289512
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -731.7752910459  3.000000e+02  -734.3935748783  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -734.4365140924  3.061908e+02               -             -           0      31.2
+[02_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   80/200]   20.00  -734.5323442177  2.955366e+02               -             -           1      57.2
+[eql  120/200]   30.00  -734.5043138310  2.952865e+02               -             -           1      77.3
+[eql  160/200]   40.00  -734.5166321414  2.956003e+02               -             -           1      97.3
+[02_product UHF] cycle 1: internal instability or unconverged SCF; rotating the orbitals and restarting with the second-order solver
+[eql  200/200]   50.00  -734.4996788418  2.950214e+02               -             -           2     117.5
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[02_product UHF] stable after 2 stability cycle(s), E = -731.739993788551
+[02_product HF] E(UHF) - E(RHF) = -3.044e-03 Ha, <S^2> = 4.005e-01
+[02_product HF] the UHF is a different solution: unrestricted reference
+[blk  120/1200]  -734.5034588246   5.342e-03  2.955096e+02  -734.4903821303   2.307e-03           2      5.486     658.3
+[blk  240/1200]  -734.5065141215   4.685e-03  2.954869e+02  -734.4919094085   1.988e-03           2      4.370    1182.7
+[blk  360/1200]  -734.5132431879   4.653e-03  2.954738e+02  -734.4925553136   1.564e-03           4      4.365    1706.4
+[blk  480/1200]  -734.5134374877   4.874e-03  2.954291e+02  -734.4936466173   1.514e-03           6      4.364    2230.1
+[blk  600/1200]  -734.5092791044   4.667e-03  2.954458e+02  -734.4934525215   1.204e-03           7      4.354    2752.6
+[blk  720/1200]  -734.5071492294   3.954e-03  2.954084e+02  -734.4930916967   1.040e-03           9      4.366    3276.6
+[blk  840/1200]  -734.5060662186   3.674e-03  2.954253e+02  -734.4927512714   9.330e-04          10      4.369    3800.8
+[blk  960/1200]  -734.5079200002   3.267e-03  2.954139e+02  -734.4933779350   8.848e-04          11      4.381    4326.5
+[blk 1080/1200]  -734.5080353172   3.125e-03  2.954198e+02  -734.4932179923   9.218e-04          12      4.360    4849.7
+[blk 1200/1200]  -734.5090078656   2.933e-03  2.954169e+02  -734.4933874301   8.640e-04          14      4.375    5374.7
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -734.509007865571
+  Gamma SE                 = 2.997453e-03
+  Gamma reliable          = yes
+  Gamma window W          = 13
+  tau_int                 = 2.428980691748878
+  effective samples       = 247.01719615893575
+  Blocking SE [primary]    = 2.932865e-03
+  Blocking B              = 29
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -734.493387430122
+  Gamma SE                 = 8.009492e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.8661917186024789
+  effective samples       = 692.6872967199977
+  Blocking SE [primary]    = 8.639552e-04
+  Blocking B              = 18
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/pt2ccsd_bar energy = -734.493387 +/- 0.000864 (1-sigma, blocking)
+[02_educt AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -734.493387 +/- 0.000864
+[02_educt AFQMC]   guide energy: -734.509008 +/- 0.002933
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+02_educt      358  0 RHF      -731.77537641                  -   0.0000      -734.23766934      -734.39381218  -734.49338743 0.00086396  -734.50900787 0.00293287      1480     5421
+
+====================================================================================================
+02_product  (16/22)
+====================================================================================================
+[02_product CC] E(MP2) = -734.1411320578  E(CCSD) = -734.3284408292  (UCCSD, 7880 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1742), max_error=1e-05 ...
+[stage] density fitting: nchol=1539 in 60.38s
+[stage] projected chol into the alpha/beta bases (358, 358 orbitals) in 2.70s
+[stage] uchol ham ready: norb=(341, 341) nchol=1539 nelec=(48, 48) frozen=(17, 17) h0=-33.7904332628
+[stage] Hamiltonian ready in 63.73s | norb=(341, 341) nchol=1539
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 2.93s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/02_product/pt2_stage.h5
+[02_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 73 s)
+[02_product] host stage done in 8222 s
+[02_product] host stage wait 2801 s of 8222 s (66% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_educt/23_educt.out
+[23_educt] ISOL24 reaction 23 educt  C16H21ClN  (converted from Bohr to Angstrom): atoms 39, charge 1, electrons 140, basis cc-pVDZ, AOs 361
+******** Runtime ********
+ run_started     = 2026-11-04 09:52:39 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.12s | norb=(341, 341)
+
+******** AFQMC ********
+ nfrozen         = (17, 17)
+ nelec           = (48, 48)
+ norb            = (341, 341)
+ nchol           = 1539
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 770
+  nchol_chunk_used            = 770
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 770  (2 steps over 1539 + 1 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 12428.4 MB
+  memory_per_walker = 294.98 MB  (109.56 MB + 770 x 246.6 KB)
+  memory_walkers    = 22123.2 MB  (75 walkers in flight)
+  memory_used       = 54426.3 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 8 compiles
+
+ guide energy    = 770 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[23_educt RHF] stable after 1 stability cycle(s), E = -1131.899258086515
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -731.7399614242  3.000000e+02  -734.3282717293  3.000000e+02           0       0.0
+[23_educt HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   40/200]   10.00  -734.3331606086  3.057887e+02               -             -           1      49.4
+[23_educt UHF] stable after 1 stability cycle(s), E = -1131.902758004240
+[23_educt HF] E(UHF) - E(RHF) = -3.500e-03 Ha, <S^2> = 4.826e-01
+[23_educt HF] the UHF is a different solution: unrestricted reference
+[eql   80/200]   20.00  -734.4437511189  2.957378e+02               -             -           5      97.6
+[eql  120/200]   30.00  -734.4235884587  2.950183e+02               -             -           5     135.7
+[eql  160/200]   40.00  -734.4252917267  2.956197e+02               -             -           5     173.0
+[eql  200/200]   50.00  -734.4481697951  2.952371e+02               -             -           7     211.9
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -734.4453478921   5.168e-03  2.952277e+02  -734.4291474853   2.527e-03           7      8.667    1040.1
+[blk  240/1200]  -734.4459542673   4.328e-03  2.953004e+02  -734.4301590679   1.877e-03           8      6.753    1850.5
+[blk  360/1200]  -734.4435241446   4.316e-03  2.953030e+02  -734.4301110259   1.902e-03          13      6.735    2658.7
+[blk  480/1200]  -734.4455254897   3.769e-03  2.953634e+02  -734.4306600933   1.571e-03          19      6.757    3469.6
+[blk  600/1200]  -734.4463754868   2.916e-03  2.953602e+02  -734.4304586807   1.161e-03          19      6.768    4281.8
+[blk  720/1200]  -734.4468222119   3.062e-03  2.953264e+02  -734.4298541025   1.154e-03          19      6.737    5090.3
+[blk  840/1200]  -734.4454477082   2.845e-03  2.953158e+02  -734.4308764875   1.257e-03          20      6.750    5900.3
+[blk  960/1200]  -734.4460199752   2.440e-03  2.953208e+02  -734.4301665404   1.269e-03          21      6.740    6709.1
+[blk 1080/1200]  -734.4460694688   2.258e-03  2.953241e+02  -734.4295826520   1.187e-03          23      6.758    7520.0
+[23_educt CC] E(MP2) = -1134.3658872648  E(CCSD) = -1134.5295234990  (UCCSD, 7446 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1785), max_error=1e-05 ...
+[stage] density fitting: nchol=1547 in 63.08s
+[stage] projected chol into the alpha/beta bases (361, 361 orbitals) in 2.79s
+[stage] uchol ham ready: norb=(339, 339) nchol=1547 nelec=(48, 48) frozen=(22, 22) h0=-254.6580791059
+[stage] Hamiltonian ready in 66.55s | norb=(339, 339) nchol=1547
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_educt/pt2_stage.h5...
+[stage] staged uchol inputs written in 2.95s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_educt/pt2_stage.h5
+[23_educt AFQMC] staged (uhf guide, upt2ccsd_bar trial, 76 s)
+[23_educt] host stage done in 7662 s
+[blk 1200/1200]  -734.4456049227   2.001e-03  2.953274e+02  -734.4294312851   9.273e-04          28      6.679    8321.5
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -734.445604922707
+  Gamma SE                 = 2.154990e-03
+  Gamma reliable          = yes
+  Gamma window W          = 8
+  tau_int                 = 1.3094784576850738
+  effective samples       = 458.1976866276165
+  Blocking SE [primary]    = 2.000961e-03
+  Blocking B              = 7
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -734.429431285093
+  Gamma SE                 = 9.495192e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 1.0487820088455428
+  effective samples       = 572.0921935536022
+  Blocking SE [primary]    = 9.272868e-04
+  Blocking B              = 18
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/upt2ccsd_bar energy = -734.429431 +/- 0.000927 (1-sigma, blocking)
+[02_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -734.429431 +/- 0.000927
+[02_product AFQMC]   guide energy: -734.445605 +/- 0.002001
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+02_product    358  0 UHF      -731.73694929      -731.73999379   0.4005      -734.14113206      -734.32844083  -734.42943129 0.00092729  -734.44560492 0.00200096      8222     8364
+
+====================================================================================================
+23_educt  (17/22)
+====================================================================================================
+[23_educt] host stage wait 0 s of 7662 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_product/23_product.out
+[23_product] ISOL24 reaction 23 product  C16H21ClN  (converted from Bohr to Angstrom): atoms 39, charge 1, electrons 140, basis cc-pVDZ, AOs 361
+******** Runtime ********
+ run_started     = 2026-11-04 12:12:03 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.16s | norb=(339, 339)
+
+******** AFQMC ********
+ nfrozen         = (22, 22)
+ nelec           = (48, 48)
+ norb            = (339, 339)
+ nchol           = 1547
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 774
+  nchol_chunk_used            = 774
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 774  (2 steps over 1547 + 1 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 12319.6 MB
+  memory_per_walker = 298.18 MB  (108.02 MB + 774 x 251.6 KB)
+  memory_walkers    = 22363.4 MB  (75 walkers in flight)
+  memory_used       = 54235.2 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 8 compiles
+
+ guide energy    = 774 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+[23_product RHF] stable after 1 stability cycle(s), E = -1131.869306194481
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -1131.9027125899  3.000000e+02  -1134.5293414516  3.000000e+02           0       0.0
+[23_product HF] RHF -> UHF instability found: running UHF from the rotated orbitals
+[eql   40/200]   10.00  -1134.5490856079  3.063931e+02               -             -           0      50.3
+[23_product UHF] stable after 1 stability cycle(s), E = -1131.870648697031
+[23_product HF] E(UHF) - E(RHF) = -1.343e-03 Ha, <S^2> = 6.363e-01
+[23_product HF] the UHF is a different solution: unrestricted reference
+[eql   80/200]   20.00  -1134.6452254589  2.958824e+02               -             -           0      99.5
+[eql  120/200]   30.00  -1134.6639714121  2.957763e+02               -             -           0     136.6
+[eql  160/200]   40.00  -1134.6841681822  2.956388e+02               -             -           0     174.7
+[eql  200/200]   50.00  -1134.6693496394  2.955601e+02               -             -           2     214.4
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -1134.6556223770   5.971e-03  2.955872e+02  -1134.6460284251   2.028e-03           9      8.671    1040.5
+[blk  240/1200]  -1134.6601015962   5.653e-03  2.956238e+02  -1134.6466932643   1.912e-03           9      6.734    1848.6
+[blk  360/1200]  -1134.6615323856   4.509e-03  2.956506e+02  -1134.6470417169   1.404e-03          15      6.753    2658.9
+[blk  480/1200]  -1134.6629584343   3.588e-03  2.956600e+02  -1134.6472544424   1.223e-03          15      6.736    3467.3
+[blk  600/1200]  -1134.6627575138   3.499e-03  2.956526e+02  -1134.6472378655   1.202e-03          23      6.740    4276.1
+[blk  720/1200]  -1134.6629067177   2.704e-03  2.956443e+02  -1134.6475919248   9.552e-04          26      6.713    5081.7
+[blk  840/1200]  -1134.6608094224   2.634e-03  2.956422e+02  -1134.6470389738   1.009e-03          27      6.718    5887.8
+[blk  960/1200]  -1134.6612033219   2.494e-03  2.956482e+02  -1134.6466264695   9.356e-04          27      6.753    6698.1
+[blk 1080/1200]  -1134.6617683748   2.254e-03  2.956591e+02  -1134.6470901393   7.732e-04          28      6.725    7505.2
+[blk 1200/1200]  -1134.6612726279   2.781e-03  2.956607e+02  -1134.6464446634   7.775e-04          34      6.735    8313.3
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -1134.661272627914
+  Gamma SE                 = 2.529044e-03
+  Gamma reliable          = yes
+  Gamma window W          = 11
+  tau_int                 = 1.8676251025403883
+  effective samples       = 321.26361933337995
+  Blocking SE [primary]    = 2.781323e-03
+  Blocking B              = 37
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -1134.646444663415
+  Gamma SE                 = 8.556083e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.09341202793613
+  effective samples       = 548.7409912002981
+  Blocking SE [primary]    = 7.774977e-04
+  Blocking B              = 5
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/upt2ccsd_bar energy = -1134.646445 +/- 0.000777 (1-sigma, blocking)
+[23_educt AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -1134.646445 +/- 0.000777
+[23_educt AFQMC]   guide energy: -1134.661273 +/- 0.002781
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+23_educt      361  1 UHF     -1131.89925809     -1131.90275800   0.4826     -1134.36588726     -1134.52952350 -1134.64644466 0.00077750 -1134.66127263 0.00278132      7662     8366
+
+====================================================================================================
+23_product  (18/22)
+====================================================================================================
+[23_product CC] E(MP2) = -1134.3245762452  E(CCSD) = -1134.4891459576  (UCCSD, 9346 s)
+[stage] building unrestricted Hamiltonian...
+[stage] cholesky from density fitting (n_aux=1785), max_error=1e-05 ...
+[stage] density fitting: nchol=1547 in 63.31s
+[stage] projected chol into the alpha/beta bases (361, 361 orbitals) in 2.70s
+[stage] uchol ham ready: norb=(339, 339) nchol=1547 nelec=(48, 48) frozen=(22, 22) h0=-277.2821578914
+[stage] Hamiltonian ready in 66.69s | norb=(339, 339) nchol=1547
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=uhf
+[stage] writing staged uchol inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_product/pt2_stage.h5...
+[stage] staged uchol inputs written in 2.92s
+staged guide (uhf) and trial (upt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/23_product/pt2_stage.h5
+[23_product AFQMC] staged (uhf guide, upt2ccsd_bar trial, 76 s)
+[23_product] host stage done in 9567 s
+[23_product] host stage wait 1199 s of 9567 s (87% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_educt/15_educt.out
+[15_educt] ISOL24 reaction 15 educt  C17H24O  (converted from Bohr to Angstrom): atoms 42, charge 0, electrons 134, basis cc-pVDZ, AOs 372
+******** Runtime ********
+ run_started     = 2026-11-04 14:51:30 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (uhf, uchol)...
+[setup] trial bundle ready in 0.00s | kind=uhf (uchol)
+[setup] preparing runtime Hamiltonian (uchol)...
+[setup] runtime Hamiltonian ready in 0.09s | norb=(339, 339)
+
+******** AFQMC ********
+ nfrozen         = (22, 22)
+ nelec           = (48, 48)
+ norb            = (339, 339)
+ nchol           = 1547
+ walker_kind     = unrestricted
+ source_kind     = cc
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = uhf
+   overlap_kernel    = trial/uhf.py:overlap_u
+   force_bias_kernel = meas/uhf_uh.py:force_bias_kernel_uw_uh
+   energy_kernel     = meas/uhf_uh.py:energy_kernel_uw_uh
+ trial           = upt2ccsd_bar
+   overlap_kernel    = trial/upt2ccsd_uh.py:overlap_u
+   energy_kernel     = meas/upt2ccsd_bar_uh.py:energy_kernel_uw_uh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 774
+  nchol_chunk_used            = 774
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 774  (2 steps over 1547 + 1 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 12319.6 MB
+  memory_per_walker = 298.18 MB  (108.02 MB + 774 x 251.6 KB)
+  memory_walkers    = 22363.4 MB  (75 walkers in flight)
+  memory_used       = 54235.2 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 8 compiles
+
+ guide energy    = 774 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -1131.8705810764  3.000000e+02  -1134.4889471937  3.000000e+02           0       0.0
+[15_educt RHF] stable after 1 stability cycle(s), E = -732.475108036509
+[eql   40/200]   10.00  -1134.4970236413  3.061579e+02               -             -           0      46.9
+[15_educt HF] RHF is stable against RHF -> UHF: restricted reference, E = -732.475108036509
+[eql   80/200]   20.00  -1134.6313250579  2.957916e+02               -             -           3      94.0
+[eql  120/200]   30.00  -1134.6183797432  2.955108e+02               -             -           3     133.4
+[eql  160/200]   40.00  -1134.6264285413  2.954633e+02               -             -           6     178.2
+[eql  200/200]   50.00  -1134.6257929002  2.954904e+02               -             -           9     214.8
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -1134.6230969981   5.184e-03  2.954662e+02  -1134.6068882063   1.945e-03          14      8.660    1039.2
+[15_educt CC] E(MP2) = -735.0453286225  E(CCSD) = -735.1939518914  (RCCSD, 1505 s)
+[stage] cholesky from density fitting (n_aux=1812), max_error=1e-05 ...
+[stage] density fitting: nchol=1588 in 69.90s
+[stage] building trial input...
+[stage] trial input ready in 0.01s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_educt/pt2_stage.h5...
+[stage] staged inputs written in 1.64s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_educt/pt2_stage.h5
+[15_educt AFQMC] staged (rhf guide, pt2ccsd_bar trial, 76 s)
+[15_educt] host stage done in 1688 s
+[blk  240/1200]  -1134.6272395787   4.917e-03  2.954769e+02  -1134.6086264642   1.424e-03          19      6.725    1846.2
+[blk  360/1200]  -1134.6251496516   4.100e-03  2.954922e+02  -1134.6078889481   1.378e-03          23      6.657    2645.0
+[blk  480/1200]  -1134.6243780729   3.865e-03  2.954995e+02  -1134.6083296602   1.060e-03          27      6.656    3443.7
+[blk  600/1200]  -1134.6237420361   3.251e-03  2.954897e+02  -1134.6083046590   8.708e-04          29      6.656    4242.4
+[blk  720/1200]  -1134.6217818728   3.093e-03  2.954932e+02  -1134.6084029112   8.337e-04          35      6.655    5041.0
+[blk  840/1200]  -1134.6221899378   3.046e-03  2.954889e+02  -1134.6085572283   8.252e-04          39      6.660    5840.2
+[blk  960/1200]  -1134.6217422281   2.406e-03  2.954781e+02  -1134.6084176903   8.621e-04          48      6.656    6639.0
+[blk 1080/1200]  -1134.6216826456   2.670e-03  2.954707e+02  -1134.6089844310   8.882e-04          61      6.657    7437.8
+[blk 1200/1200]  -1134.6212357480   2.415e-03  2.954642e+02  -1134.6087599102   8.544e-04          65      6.657    8236.6
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/upt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -1134.621235748024
+  Gamma SE                 = 2.295217e-03
+  Gamma reliable          = yes
+  Gamma window W          = 10
+  tau_int                 = 1.7946188665030258
+  effective samples       = 334.33282754301655
+  Blocking SE [primary]    = 2.415247e-03
+  Blocking B              = 29
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/upt2ccsd_bar energy:
+  mean                    = -1134.608759910185
+  Gamma SE                 = 7.465609e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.8561175714236128
+  effective samples       = 700.8383194404918
+  Blocking SE [primary]    = 8.544090e-04
+  Blocking B              = 47
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/upt2ccsd_bar energy = -1134.608760 +/- 0.000854 (1-sigma, blocking)
+[23_product AFQMC] AFQMC/pt2CCSD (uhf guide, upt2ccsd_bar) energy: -1134.608760 +/- 0.000854
+[23_product AFQMC]   guide energy: -1134.621236 +/- 0.002415
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+23_product    361  1 UHF     -1131.86930619     -1131.87064870   0.6363     -1134.32457625     -1134.48914596 -1134.60875991 0.00085441 -1134.62123575 0.00241525      9567     8271
+
+====================================================================================================
+15_educt  (19/22)
+====================================================================================================
+[15_educt] host stage wait 0 s of 1688 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_product/15_product.out
+[15_product] ISOL24 reaction 15 product  C17H24O  (converted from Bohr to Angstrom): atoms 42, charge 0, electrons 134, basis cc-pVDZ, AOs 372
+******** Runtime ********
+ run_started     = 2026-11-04 17:09:22 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.07s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.02s
+
+******** AFQMC ********
+ nfrozen         = 18
+ nelec           = (49, 49)
+ norb            = 354
+ nchol           = 1588
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1588
+  nchol_chunk_used            = 1588
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1588  (1 steps over 1588 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 6082.1 MB
+  memory_per_walker = 248.89 MB  (101.53 MB + 1588 x 95.0 KB)
+  memory_walkers    = 18666.4 MB  (75 walkers in flight)
+  memory_used       = 69193.2 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1588 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -732.4750144572  3.000000e+02  -735.1936983479  3.000000e+02           0       0.0
+[15_product RHF] stable after 1 stability cycle(s), E = -732.472991010729
+[eql   40/200]   10.00  -735.2162261488  3.062665e+02               -             -           0      29.7
+[eql   80/200]   20.00  -735.3093850909  2.956210e+02               -             -           0      58.3
+[15_product HF] RHF is stable against RHF -> UHF: restricted reference, E = -732.472991010729
+[eql  120/200]   30.00  -735.3266227877  2.954095e+02               -             -           0      77.6
+[eql  160/200]   40.00  -735.3343815748  2.952708e+02               -             -           0      97.1
+[eql  200/200]   50.00  -735.3424075182  2.954747e+02               -             -           0     117.6
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -735.3192691960   6.974e-03  2.952771e+02  -735.3117765227   2.900e-03           1      6.194     743.2
+[blk  240/1200]  -735.3137718768   4.662e-03  2.953459e+02  -735.3059471976   2.408e-03           1      5.090    1354.1
+[15_product CC] E(MP2) = -735.0354748079  E(CCSD) = -735.1788287227  (RCCSD, 1579 s)
+[stage] cholesky from density fitting (n_aux=1812), max_error=1e-05 ...
+[stage] density fitting: nchol=1589 in 75.54s
+[stage] building trial input...
+[stage] trial input ready in 0.01s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_product/pt2_stage.h5...
+[stage] staged inputs written in 1.65s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/15_product/pt2_stage.h5
+[15_product AFQMC] staged (rhf guide, pt2ccsd_bar trial, 82 s)
+[15_product] host stage done in 1776 s
+[blk  360/1200]  -735.3185637563   3.679e-03  2.953518e+02  -735.3066525632   1.774e-03           1      5.050    1960.1
+[blk  480/1200]  -735.3158945030   3.484e-03  2.953349e+02  -735.3060271129   1.595e-03           3      5.019    2562.4
+[blk  600/1200]  -735.3148438821   3.560e-03  2.953969e+02  -735.3050321433   1.345e-03           5      5.020    3164.8
+[blk  720/1200]  -735.3129744873   2.565e-03  2.953956e+02  -735.3050859039   1.312e-03           5      5.022    3767.4
+[blk  840/1200]  -735.3143949316   3.194e-03  2.953949e+02  -735.3055666350   1.137e-03           5      5.020    4369.8
+[blk  960/1200]  -735.3151220582   2.469e-03  2.953998e+02  -735.3060141976   8.344e-04           5      5.022    4972.5
+[blk 1080/1200]  -735.3155783326   2.100e-03  2.954104e+02  -735.3057978270   9.606e-04           6      5.015    5574.3
+[blk 1200/1200]  -735.3152526460   2.115e-03  2.954181e+02  -735.3053727701   7.546e-04           8      5.019    6176.6
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -735.315252645978
+  Gamma SE                 = 2.403950e-03
+  Gamma reliable          = yes
+  Gamma window W          = 10
+  tau_int                 = 1.8456793906815185
+  effective samples       = 325.0835454030017
+  Blocking SE [primary]    = 2.114567e-03
+  Blocking B              = 9
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -735.305372770127
+  Gamma SE                 = 8.425174e-04
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.2073527311310075
+  effective samples       = 496.95501946472604
+  Blocking SE [primary]    = 7.546216e-04
+  Blocking B              = 7
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/pt2ccsd_bar energy = -735.305373 +/- 0.000755 (1-sigma, blocking)
+[15_educt AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -735.305373 +/- 0.000755
+[15_educt AFQMC]   guide energy: -735.315253 +/- 0.002115
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+15_educt      372  0 RHF      -732.47510804                  -   0.0000      -735.04532862      -735.19395189  -735.30537277 0.00075462  -735.31525265 0.00211457      1688     6226
+
+====================================================================================================
+15_product  (20/22)
+====================================================================================================
+[15_product] host stage wait 0 s of 1776 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_educt/24_educt.out
+[24_educt] ISOL24 reaction 24 educt  C18H33Si  (converted from Bohr to Angstrom): atoms 52, charge 1, electrons 154, basis cc-pVDZ, AOs 435
+******** Runtime ********
+ run_started     = 2026-11-04 18:53:09 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.00s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.02s
+
+******** AFQMC ********
+ nfrozen         = 18
+ nelec           = (49, 49)
+ norb            = 354
+ nchol           = 1589
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1589
+  nchol_chunk_used            = 1589
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1589  (1 steps over 1589 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 6084.7 MB
+  memory_per_walker = 248.98 MB  (101.53 MB + 1589 x 95.0 KB)
+  memory_walkers    = 18673.4 MB  (75 walkers in flight)
+  memory_used       = 69235.5 MB
+  memory_budget     = 69632.0 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1589 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -732.4729578526  3.000000e+02  -735.1786552748  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -735.2225937530  3.063791e+02               -             -           0      29.4
+[24_educt RHF] stable after 1 stability cycle(s), E = -989.602568175515
+[eql   80/200]   20.00  -735.3114313048  2.957977e+02               -             -           0      57.9
+[eql  120/200]   30.00  -735.2893286482  2.953324e+02               -             -           0      78.8
+[eql  160/200]   40.00  -735.3004986454  2.954673e+02               -             -           0      99.7
+[eql  200/200]   50.00  -735.3417498212  2.957491e+02               -             -           1     120.5
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[24_educt HF] RHF is stable against RHF -> UHF: restricted reference, E = -989.602568175515
+[blk  120/1200]  -735.2870776560   4.666e-03  2.955203e+02  -735.2857266153   1.698e-03           1      6.251     750.1
+[blk  240/1200]  -735.2900647386   3.127e-03  2.954880e+02  -735.2848955058   1.486e-03           1      5.162    1369.6
+[blk  360/1200]  -735.2914926093   3.305e-03  2.954629e+02  -735.2854799407   1.331e-03           1      5.181    1991.2
+[blk  480/1200]  -735.2966820593   4.334e-03  2.954541e+02  -735.2864649931   1.288e-03           1      5.152    2609.5
+[blk  600/1200]  -735.2971179480   3.628e-03  2.954630e+02  -735.2862851826   1.027e-03           3      5.168    3229.7
+[blk  720/1200]  -735.2981407022   3.087e-03  2.954510e+02  -735.2866470583   8.105e-04           7      5.179    3851.2
+[blk  840/1200]  -735.2978331012   2.864e-03  2.954388e+02  -735.2872421780   9.535e-04           7      5.187    4473.6
+[24_educt CC] E(MP2) = -992.2442945553  E(CCSD) = -992.4538330741  (RCCSD, 4390 s)
+[stage] cholesky from density fitting (n_aux=2131), max_error=1e-05 ...
+[stage] density fitting: nchol=1863 in 143.12s
+[stage] building trial input...
+[stage] trial input ready in 0.01s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_educt/pt2_stage.h5...
+[stage] staged inputs written in 2.65s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_educt/pt2_stage.h5
+[24_educt AFQMC] staged (rhf guide, pt2ccsd_bar trial, 153 s)
+[24_educt] host stage done in 4700 s
+[blk  960/1200]  -735.2977997285   2.609e-03  2.954390e+02  -735.2874545418   8.856e-04           9      5.047    5079.3
+[blk 1080/1200]  -735.2978545680   2.634e-03  2.954523e+02  -735.2871198212   9.078e-04          10      5.039    5684.0
+[blk 1200/1200]  -735.2974518576   2.276e-03  2.954686e+02  -735.2867753424   8.280e-04          10      5.040    6288.8
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -735.297451857594
+  Gamma SE                 = 2.277337e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.6004847861618048
+  effective samples       = 374.8864126593088
+  Blocking SE [primary]    = 2.275708e-03
+  Blocking B              = 14
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -735.286775342423
+  Gamma SE                 = 6.924577e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.8894881601109916
+  effective samples       = 674.545235009234
+  Blocking SE [primary]    = 8.280180e-04
+  Blocking B              = 37
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+AFQMC/pt2ccsd_bar energy = -735.286775 +/- 0.000828 (1-sigma, blocking)
+[15_product AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -735.286775 +/- 0.000828
+[15_product AFQMC]   guide energy: -735.297452 +/- 0.002276
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+15_product    372  0 RHF      -732.47299101                  -   0.0000      -735.03547481      -735.17882872  -735.28677534 0.00082802  -735.29745186 0.00227571      1776     6320
+
+====================================================================================================
+24_educt  (21/22)
+====================================================================================================
+[24_educt] host stage wait 0 s of 4700 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+output file: /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_product/24_product.out
+[24_product] ISOL24 reaction 24 product  C18H33Si  (converted from Bohr to Angstrom): atoms 52, charge 1, electrons 154, basis cc-pVDZ, AOs 435
+******** Runtime ********
+ run_started     = 2026-11-04 20:38:29 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.08s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.00s
+
+******** AFQMC ********
+ nfrozen         = 23
+ nelec           = (54, 54)
+ norb            = 412
+ nchol           = 1863
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 932
+  nchol_chunk_used            = 932
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 932  (2 steps over 1863 + 1 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 9723.5 MB
+  memory_per_walker = 172.06 MB  (172.06 MB + 932 x 0.0 KB)
+  memory_walkers    = 12904.6 MB  (75 walkers in flight)
+  memory_used       = 55532.6 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 8 compiles
+
+ guide energy    = 932 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -989.6024991792  3.000000e+02  -992.4535465883  3.000000e+02           0       0.0
+[24_product RHF] stable after 1 stability cycle(s), E = -989.580929742415
+[eql   40/200]   10.00  -992.4830669866  3.061447e+02               -             -           0      38.7
+[eql   80/200]   20.00  -992.5983454539  2.946776e+02               -             -           0      75.4
+[eql  120/200]   30.00  -992.5840682658  2.944811e+02               -             -           2     103.5
+[24_product HF] RHF is stable against RHF -> UHF: restricted reference, E = -989.580929742415
+[eql  160/200]   40.00  -992.5697799183  2.944313e+02               -             -           2     131.3
+[eql  200/200]   50.00  -992.5789690008  2.949145e+02               -             -           2     159.9
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -992.5759495684   4.875e-03  2.944877e+02  -992.5643145381   2.225e-03           3     11.405    1368.6
+[blk  240/1200]  -992.5771873387   4.960e-03  2.945020e+02  -992.5642887640   1.800e-03           4      9.923    2559.4
+[blk  360/1200]  -992.5833385002   4.260e-03  2.944451e+02  -992.5658386034   1.397e-03           7      9.966    3755.4
+[24_product CC] E(MP2) = -992.2175154766  E(CCSD) = -992.4279721422  (RCCSD, 4756 s)
+[stage] cholesky from density fitting (n_aux=2131), max_error=1e-05 ...
+[blk  480/1200]  -992.5826687000   3.945e-03  2.944710e+02  -992.5649285711   1.467e-03           8      9.930    4947.0
+[stage] density fitting: nchol=1863 in 134.41s
+[stage] building trial input...
+[stage] trial input ready in 0.01s | kind=rhf
+[stage] writing staged inputs to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_product/pt2_stage.h5...
+[stage] staged inputs written in 2.63s
+staged guide (rhf) and trial (pt2ccsd_bar) written to /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/24_product/pt2_stage.h5
+[24_product AFQMC] staged (rhf guide, pt2ccsd_bar trial, 144 s)
+[24_product] host stage done in 5069 s
+[blk  600/1200]  -992.5848374391   3.662e-03  2.944683e+02  -992.5656243988   1.059e-03          10      9.806    6123.7
+[blk  720/1200]  -992.5849187730   3.349e-03  2.944680e+02  -992.5661652682   9.819e-04          10      9.808    7300.7
+[blk  840/1200]  -992.5849416214   2.765e-03  2.944824e+02  -992.5662807978   9.589e-04          11      9.806    8477.4
+[blk  960/1200]  -992.5849461856   2.733e-03  2.944729e+02  -992.5663840230   9.540e-04          14      9.806    9654.1
+[blk 1080/1200]  -992.5845636897   2.388e-03  2.944740e+02  -992.5665166699   7.930e-04          14      9.806   10830.8
+[blk 1200/1200]  -992.5839586242   2.173e-03  2.944595e+02  -992.5661448179   7.364e-04          15      9.805   12007.4
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -992.583958624228
+  Gamma SE                 = 2.305163e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.6232714636843981
+  effective samples       = 369.6239436367336
+  Blocking SE [primary]    = 2.172938e-03
+  Blocking B              = 11
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -992.566144817918
+  Gamma SE                 = 8.097322e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 0.9071506361841196
+  effective samples       = 661.4116510173743
+  Blocking SE [primary]    = 7.364388e-04
+  Blocking B              = 4
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/pt2ccsd_bar energy = -992.566145 +/- 0.000736 (1-sigma, blocking)
+[24_educt AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -992.566145 +/- 0.000736
+[24_educt AFQMC]   guide energy: -992.583959 +/- 0.002173
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+24_educt      435  1 RHF      -989.60256818                  -   0.0000      -992.24429456      -992.45383307  -992.56614482 0.00073644  -992.58395862 0.00217294      4700    12068
+
+====================================================================================================
+24_product  (22/22)
+====================================================================================================
+[24_product] host stage wait 0 s of 5069 s (100% hidden)
+
+    ████████╗██████╗  ██████╗ ████████╗
+    ╚══██╔══╝██╔══██╗██╔═══██╗╚══██╔══╝
+       ██║   ██████╔╝██║   ██║   ██║
+       ██║   ██╔══██╗██║   ██║   ██║
+       ██║   ██║  ██║╚██████╔╝   ██║
+       ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝
+  Trotter-propagated Random Orbital Trajectories
+differentiable auxiliary-field quantum Monte Carlo
+
+******** Runtime ********
+ run_started     = 2026-11-04 23:59:37 PST (UTC-08:00)
+ hostname        = nid008521
+ system          = Linux 6.4.0-150600.23.135_15.0.45-cray_shasta_c
+ machine         = x86_64
+ processor       = x86_64
+ cpu_count       = 128
+ jax_version     = 0.8.2
+ jaxlib_version  = 0.8.2
+ jax_backend     = gpu
+ jax_devices     = 4 local / 4 global
+ jax_process     = 0 / 1
+ jax_device_kind = 4 x gpu (NVIDIA A100-SXM4-80GB)
+ git_root        = /global/common/software/jcap/zhyichi/trot
+ git_branch      = pt2ccsd-test
+ git_commit      = 9cda939099816a998f9b1a7c1a2306f2eff20551
+ git_status      = clean
+
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.00s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.02s
+
+******** AFQMC ********
+ nfrozen         = 23
+ nelec           = (54, 54)
+ norb            = 412
+ nchol           = 1863
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd_bar
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = meas/pt2ccsd_bar.py:energy_kernel_rw_rh_bar
+   components        = ('theta', 'electronic_0', 'h_t')
+   energy_fn         = meas/pt2ccsd.py:combine_first_order_energy
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 932
+  nchol_chunk_used            = 932
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 932  (2 steps over 1863 + 1 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 9723.5 MB
+  memory_per_walker = 172.06 MB  (172.06 MB + 932 x 0.0 KB)
+  memory_walkers    = 12904.6 MB  (75 walkers in flight)
+  memory_used       = 55532.6 MB
+  memory_budget     = 69632.0 MB
+  note              = cholesky chunk set by the budget; xla: 8 compiles
+
+ guide energy    = 932 cholesky vectors per step (the trial's)
+
+ tau_eql         = 50 (n_eql_blocks = 200, tau reached = 50)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 1200
+  n_walkers               = 300
+  seed                    = 7
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+Equilibration:
+E_Trial is not measured till the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Trial_E_blk   Trial_W_blk        nodes      t[s]
+[eql    0/200]    0.00  -989.5808678196  3.000000e+02  -992.4276993436  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -992.4404757527  3.059877e+02               -             -           0      28.1
+[eql   80/200]   20.00  -992.5747175131  2.947661e+02               -             -           0      56.2
+[eql  120/200]   30.00  -992.5509065448  2.944845e+02               -             -           0      82.0
+[eql  160/200]   40.00  -992.5670693527  2.946113e+02               -             -           0     107.8
+[eql  200/200]   50.00  -992.5521686687  2.945009e+02               -             -           0     133.6
+
+Sampling:
+
+        block     Guide_E_avg  Guide_E_err       Guide_W     Trial_E_avg  Trial_E_err       nodes    dt[s/bl]     t[s]
+[blk  120/1200]  -992.5504706669   6.542e-03  2.945544e+02  -992.5372173598   2.408e-03           1     10.943    1313.2
+[blk  240/1200]  -992.5519639551   4.175e-03  2.945052e+02  -992.5385597492   2.056e-03           1      9.808    2490.2
+[blk  360/1200]  -992.5571613853   3.425e-03  2.944484e+02  -992.5392120429   1.567e-03           1      9.805    3666.8
+[blk  480/1200]  -992.5565371369   2.937e-03  2.944302e+02  -992.5395398786   1.262e-03           2      9.808    4843.7
+[blk  600/1200]  -992.5563438049   3.011e-03  2.944116e+02  -992.5389377094   1.140e-03           3      9.809    6020.7
+[blk  720/1200]  -992.5593355264   3.522e-03  2.943824e+02  -992.5396516129   9.040e-04           6      9.806    7197.5
+[blk  840/1200]  -992.5590339572   3.350e-03  2.944027e+02  -992.5395980512   1.083e-03          10      9.805    8374.0
+[blk  960/1200]  -992.5586789243   2.691e-03  2.943964e+02  -992.5396051143   9.558e-04          15      9.809    9551.1
+[blk 1080/1200]  -992.5576942934   2.708e-03  2.943990e+02  -992.5391823836   7.472e-04          18      9.804   10727.5
+[blk 1200/1200]  -992.5583624112   2.383e-03  2.944066e+02  -992.5397008604   7.589e-04          19      9.809   11904.6
+
+Rejected 0 guide outlier blocks.
+Rejected 0 AFQMC/pt2ccsd_bar outlier blocks.
+
+Final analysis of the guide energy:
+  mean                    = -992.558362411229
+  Gamma SE                 = 2.198691e-03
+  Gamma reliable          = yes
+  Gamma window W          = 9
+  tau_int                 = 1.5861674138576183
+  effective samples       = 378.2702851906267
+  Blocking SE [primary]    = 2.383003e-03
+  Blocking B              = 23
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+Final analysis of the AFQMC/pt2ccsd_bar energy:
+  mean                    = -992.539700860406
+  Gamma SE                 = 8.047438e-04
+  Gamma reliable          = yes
+  Gamma window W          = 6
+  tau_int                 = 0.9865333102491479
+  effective samples       = 608.1903102171691
+  Blocking SE [primary]    = 7.588698e-04
+  Blocking B              = 7
+  Blocking selection      = plateau (plateau_found=True)
+  Reported method         = blocking (reliable=yes)
+
+AFQMC/pt2ccsd_bar energy = -992.539701 +/- 0.000759 (1-sigma, blocking)
+[24_product AFQMC] AFQMC/pt2CCSD (rhf guide, pt2ccsd_bar) energy: -992.539701 +/- 0.000759
+[24_product AFQMC]   guide energy: -992.558362 +/- 0.002383
+
+molecule      nao  q ref             E(RHF)             E(UHF)    <S^2>             E(MP2)            E(CCSD)       E(AFQMC)       +/-       E(guide)       +/- t_host[s] t_qmc[s]
+24_product    435  1 RHF      -989.58092974                  -   0.0000      -992.21751548      -992.42797214  -992.53970086 0.00075887  -992.55836241 0.00238300      5069    11923
+
+done: 22 of 22 molecules; summary in /pscratch/sd/z/zhyichi/work/isol24_dataset/afqmc/small/summary.out

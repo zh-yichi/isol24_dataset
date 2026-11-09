@@ -1,0 +1,9 @@
+Job 60779826 on nid008521 at Tue Nov  3 08:18:25 PM PST 2026
+GPU 0: NVIDIA A100-SXM4-80GB (UUID: GPU-34043b6f-e0b0-f3e7-7603-f0e229435d11)
+GPU 1: NVIDIA A100-SXM4-80GB (UUID: GPU-aa8919ca-0174-b1bf-e8f2-5154f8a6144f)
+GPU 2: NVIDIA A100-SXM4-80GB (UUID: GPU-216c4518-1d38-d83d-3636-4346f1f688ba)
+GPU 3: NVIDIA A100-SXM4-80GB (UUID: GPU-e1eea3f6-259a-619e-e1b9-fd6b6732a9a0)
+               total        used        free      shared  buff/cache   available
+Mem:             251          21         235           0           1         229
+Swap:              0           0           0
+[CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2), CudaDevice(id=3)]

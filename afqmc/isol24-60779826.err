@@ -1,0 +1,13 @@
+WARNING: overwriting environment variables set in the machine
+overwriting variable ['LD_LIBRARY_PATH']
+/global/homes/z/zhyichi/software/trot/trot/afqmc.py:5: UserWarning: JAX was imported before AFQMC configuration; GPU memory settings (XLA_PYTHON_CLIENT_PREALLOCATE, XLA_PYTHON_CLIENT_ALLOCATOR) may not take effect. For full control, call config.configure_once(...) before importing jax.
+  configure_once()
+W1104 09:52:49.967462 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 53.46GiB (57400527861 bytes) by rematerialization; only reduced to 71.85GiB (77149425840 bytes), down from 83.77GiB (89945148432 bytes) originally
+W1104 12:12:14.538220 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 53.53GiB (57479984341 bytes) by rematerialization; only reduced to 71.89GiB (77191136496 bytes), down from 83.64GiB (89812998480 bytes) originally
+W1104 14:51:41.802624 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 53.53GiB (57479984341 bytes) by rematerialization; only reduced to 71.89GiB (77191136496 bytes), down from 83.64GiB (89812998480 bytes) originally
+W1104 17:09:33.558595 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 57.22GiB (61439695035 bytes) by rematerialization; only reduced to 58.30GiB (62603191976 bytes), down from 69.22GiB (74322860800 bytes) originally
+W1104 17:12:15.623810 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 56.12GiB (60264464705 bytes) by rematerialization; only reduced to 58.32GiB (62624016611 bytes), down from 69.24GiB (74343685451 bytes) originally
+W1104 18:53:19.320233 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 57.22GiB (61438742634 bytes) by rematerialization; only reduced to 58.34GiB (62644708976 bytes), down from 69.26GiB (74367372400 bytes) originally
+W1104 18:55:45.499364 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 56.12GiB (60262772428 bytes) by rematerialization; only reduced to 58.36GiB (62665533611 bytes), down from 69.28GiB (74388197051 bytes) originally
+W1104 20:38:39.956679 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 55.32GiB (59399637531 bytes) by rematerialization; only reduced to 87.16GiB (93588409392 bytes), down from 104.37GiB (112062393984 bytes) originally
+W1104 23:59:42.622015 2051408 hlo_rematerialization.cc:3204] Can't reduce memory use below 55.32GiB (59399637531 bytes) by rematerialization; only reduced to 87.16GiB (93588409392 bytes), down from 104.37GiB (112062393984 bytes) originally

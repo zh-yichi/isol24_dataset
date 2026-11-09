@@ -89,7 +89,7 @@ CC_MAX_CYCLE = 100
 
 # AFQMC/pt2CCSD
 N_WALKERS = 300                  # must be divisible by the number of GPUs
-N_BLOCKS = 2000
+N_BLOCKS = 1200
 TAU_EQL = 50
 SEED = 7
 MIXED_PRECISION = True

@@ -1,0 +1,150 @@
+[lnoafqmc] fragment space: nocc=32 ncas=175 ncore=14
+[lnoafqmc] effective core and h1 in 0.37s (E_core=-24.2083648493)
+[lnoafqmc] DF tensor in the active space (1300, 15400) in 0.31s
+[lnoafqmc] cholesky: nchol=1040 (cut 1e-05) in 2.04s
+[stage] building trial input...
+[stage] trial input ready in 0.00s | kind=rhf
+[setup] building trial bundle (rhf)...
+[setup] trial bundle ready in 0.07s | kind=rhf
+[setup] preparing runtime Hamiltonian...
+[setup] runtime Hamiltonian ready in 0.04s
+
+******** LNO fragment 11 [C10H27H28] ********
+ nactocc         = 32
+ nactvir         = 143
+ nfrzocc         = 14
+ nfrzvir         = 79
+ lno_thresh      = [3.00e-05, 3.00e-06]
+ E(LNO-MP2)      = -0.14753265
+ E(LNO-CCSD)     = -0.15918309
+ max_error       = 2.89e-04
+ stop_ratio      = 0.7  min_blocks = 300
+ max_memory      = xla  (default)
+
+******** AFQMC ********
+ nfrozen         = 14
+ nelec           = (32, 32)
+ norb            = 175
+ nchol           = 1040
+ walker_kind     = restricted
+ source_kind     = mf
+ chol_cut        = 1e-05
+ cache           = None
+ mixed_precision = True
+   guide           = True
+   trial           = True
+
+ guide           = rhf
+   overlap_kernel    = trial/rhf.py:overlap_r
+   force_bias_kernel = meas/rhf.py:force_bias_kernel_rw_rh
+   energy_kernel     = meas/rhf_rh.py:energy_kernel_rw_rh
+ trial           = pt2ccsd
+   overlap_kernel    = trial/pt2ccsd.py:overlap_r
+   energy_kernel     = lnoafqmc/meas/pt2ccsd.py:energy_kernel_rw_rh
+   components        = ('t2frg', 'e0frg', 'e1frg', 'e0')
+   energy_fn         = lnoafqmc/meas/pt2ccsd.py:frag_pt2ccsd_energy_fn
+
+ trial_meas_cfg  = Pt2ccsdChunkMeasCfg
+  mixed_real_dtype            = float32
+  mixed_complex_dtype         = complex64
+  mixed_real_dtype_testing    = float32
+  mixed_complex_dtype_testing = complex64
+  nchol_chunk                 = 1040
+  nchol_chunk_used            = 1040
+
+ chunk_plan      = ChunkPlan
+  nchol_chunk       = 1040  (1 steps over 1040 + 0 padded)
+  n_chunks          = 1
+  walkers_in_flight = 75
+  memory_resident   = 791.4 MB
+  memory_per_walker = 252.08 MB  (3.84 MB + 1040 x 244.4 KB)
+  memory_walkers    = 18905.8 MB  (75 walkers in flight)
+  memory_used       = 18363.3 MB
+  memory_budget     = 51734.2 MB
+  note              = whole cholesky tensor fits in one step; xla: 6 compiles
+
+ guide energy    = 1040 cholesky vectors per step (the trial's)
+
+ QmcParams:
+  dt                      = 0.005
+  n_chunks                = 1
+  n_exp_terms             = 6
+  n_prop_steps            = 50
+  n_blocks                = 2000
+  n_walkers               = 300
+  seed                    = 612176794
+  auto_n_chunks           = True
+  pop_control_damping     = 0.1
+  weight_floor            = 0.001
+  weight_cap              = 100.0
+  shift_ema               = 0.1
+  n_eql_blocks            = 200
+  error_method            = blocking
+  mixed_outlier           = none
+  local_cholesky_sampling = True
+
+
+[frag 11] Equilibration:
+The fragment energy is not measured until the sampling phase
+
+        block     tau     Guide_E_blk   Guide_W_blk      Frag_E_blk    Frag_W_blk       nodes      t[s]
+[eql    0/200]    0.00  -466.0963297126  3.000000e+02   -0.1591715431  3.000000e+02           0       0.0
+[eql   40/200]   10.00  -467.5446425986  3.034927e+02               -             -           0       7.5
+[eql   80/200]   20.00  -467.5992176456  2.981305e+02               -             -           0      14.2
+[eql  120/200]   30.00  -467.5856600835  2.977236e+02               -             -           0      18.5
+[eql  160/200]   40.00  -467.6118995025  2.980331e+02               -             -           0      22.8
+[eql  200/200]   50.00  -467.5893038259  2.977307e+02               -             -           0      27.2
+
+[frag 11] Sampling:
+Early stop once the fragment error < 0.70 x 2.887e-04 = 2.021e-04, after at least 300 blocks
+
+        block     Guide_E_avg  Guide_E_err       Guide_W      Frag_E_avg  Frag_E_err       nodes    dt[s/bl]      t[s]
+[blk  200/2000]  -467.5937159121   3.123e-03  2.978504e+02   -0.1647023475   1.789e-04           0       0.385      77.0
+[blk  400/2000]  -467.5980275575   2.381e-03  2.978820e+02   -0.1648461232   1.356e-04           0       0.239     124.8
+
+[frag 11] Fragment error 1.356e-04 < 2.021e-04 at block 400: stopping.
+
+[frag 11] Rejected 0 guide outlier blocks.
+[frag 11] Rejected 0 fragment outlier blocks.
+
+[frag 11] Final analysis of the guide energy:
+  mean                    = -467.598027557528
+  Gamma SE                 = 2.532255e-03
+  Gamma reliable          = yes
+  Gamma window W          = 7
+  tau_int                 = 1.3802014693285105
+  effective samples       = 144.90638102081076
+  Blocking SE [primary]    = 2.381099e-03
+  Blocking B              = 8
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+[frag 11] Final analysis of the AFQMC/pt2CCSD fragment energy:
+  mean                    = -0.164846123199
+  Gamma SE                 = 1.204668e-04
+  Gamma reliable          = yes
+  Gamma window W          = 5
+  tau_int                 = 0.8171646479821825
+  effective samples       = 244.74871801399908
+  Blocking SE [primary]    = 1.355961e-04
+  Blocking B              = 10
+  Blocking selection      = near_maximum_fallback (plateau_found=False)
+  Reported method         = blocking (reliable=no)
+
+[frag 11] Final AFQMC/guide energy:            -467.598028 +/- 0.002381
+[frag 11] Final AFQMC/pt2CCSD fragment energy: -0.164846 +/- 0.000136 (1-sigma, blocking)
+[frag 11] <t1> = weightp/weight = 1.01004
+[frag 11] Sampling blocks: 400, wall time 127.6 s
+device memory: 6.4 MB in use (+6.4 MB vs before the fragment)
+
+============================== Fragment11 Results ==============================
+	 LNO Fragment C10H27H28
+--------------------------------------------------------------------------------
+	 LNO-Active Space electrons: 32 | orbitals: 175 
+	 LNO-MP2 Fragment Energy:    -0.14753265 
+	 LNO-CCSD Fragment Energy:   -0.15918309 
+	 LNO-AFQMC Fragment Energy:  -0.16485 +/- 0.00014 
+	 LNO-CCSD Fragment Time:     77.92 
+	 LNO-CCSD Fragment Wait:     0.00 
+	 LNO-AFQMC Fragment Time:    151.46 
+================================================================================
